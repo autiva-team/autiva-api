@@ -21,7 +21,7 @@ namespace Autiva.Api.Controllers
             return Ok(new
             {
                 estado = "ok",
-                mensaje = "API Autiva v1",
+                mensaje = "API Autiva v1.1",
                 conexionConfigurada = !string.IsNullOrEmpty(cadena),
                 fecha = DateTime.Now
             });
