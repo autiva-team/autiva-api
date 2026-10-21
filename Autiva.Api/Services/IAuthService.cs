@@ -10,4 +10,8 @@ public interface IAuthService
     Task<ResultadoRegistro> RegistrarAsync(
         RegistroUsuarioRequest solicitud,
         CancellationToken cancellationToken = default);
+
+    Task<ResultadoLogin> LoginAsync(
+        LoginRequest solicitud,
+        CancellationToken cancellationToken = default);
 }
