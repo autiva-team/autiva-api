@@ -1,8 +1,7 @@
-using Autiva.Api.Data;
 using Autiva.Api.Filters;
-using Autiva.Api.Services;
+using Autiva.Application;
+using Autiva.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
@@ -42,13 +41,8 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
-builder.Services.AddDbContext<AutivaDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sql => sql.EnableRetryOnFailure()));
-
-// Servicios de negocio (capa Services)
-builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // Autenticación JWT (HS256). La clave/issuer/audience vienen de configuración
 // (appsettings / variables de App Service), nunca del código.
