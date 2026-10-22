@@ -1,0 +1,17 @@
+namespace Autiva.Application.Services;
+
+using Autiva.Application.Dtos;
+
+/// <summary>
+/// Contrato del servicio de cuentas de acceso.
+/// </summary>
+public interface IAuthService
+{
+    Task<ResultadoRegistro> RegistrarAsync(
+        RegistroUsuarioRequest solicitud,
+        CancellationToken cancellationToken = default);
+
+    Task<ResultadoLogin> LoginAsync(
+        LoginRequest solicitud,
+        CancellationToken cancellationToken = default);
+}

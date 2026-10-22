@@ -1,6 +1,6 @@
 using System.Net.Mail;
-using Autiva.Api.Dtos;
-using Autiva.Api.Services;
+using Autiva.Application.Dtos;
+using Autiva.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
