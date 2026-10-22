@@ -5,18 +5,32 @@ PWA de expediente digital vehicular: registro de cargas de combustible, servicio
 
 ## Arquitectura
 Cliente-servidor desacoplado. Este repo es solo el **backend**.
-- **Backend (este repo):** API REST en ASP.NET, organizada **por capas** dentro de un solo proyecto: Controladores → Servicios → Datos.
+- **Backend (este repo):** API REST en ASP.NET, organizada en **Clean Architecture** con cuatro proyectos .NET 8 en la misma solución.
 - **Frontend (otro repo, autiva-web):** SPA en React + Vite como PWA.
 - **Base de datos:** Azure SQL Database, ya conectada con EF Core. Las tablas ya existen.
-- **Despliegue:** Azure App Service.
+- **Despliegue:** Azure App Service. El workflow de GitHub Actions compila y publica `Autiva.Api/Autiva.Api.csproj` directamente (no el .sln), así que ese proyecto y su ruta no se mueven.
 
-## Estructura de carpetas
+## Proyectos de la solución
+```
+Autiva.Domain/          entidades (Entities/), sin dependencias de nada más
+Autiva.Application/     Dtos/, Interfaces/ (repositorios y servicios externos),
+                         Services/ (lógica de negocio), DependencyInjection.cs
+                         No referencia Entity Framework.
+Autiva.Infrastructure/  Persistence/ (AutivaDbContext), Repositories/,
+                         Security/ (hash de contraseña, generación de JWT),
+                         DependencyInjection.cs
+Autiva.Api/             Controllers/, Filters/, Program.cs
+                         Los controladores solo llaman servicios de Application.
+```
+
+Referencias entre proyectos: `Application -> Domain`; `Infrastructure -> Application, Domain`; `Api -> Application, Infrastructure`.
+
+En `Program.cs`: `builder.Services.AddApplication()` y `builder.Services.AddInfrastructure(builder.Configuration)` registran las dependencias de cada capa.
+
+## Estructura de carpetas (dentro de Autiva.Api)
 ```
 Controllers/     solo reciben la petición, validan y llaman al servicio
-Services/        lógica de negocio (interfaz + implementación)
-Data/            DbContext y entidades de EF Core
-DTOs/            objetos de entrada y salida por feature
-BackgroundJobs/  RecordatoriosJob: revisa recordatorios y envía push
+Filters/         filtros de Swagger (ej. AuthorizeOperationFilter)
 Program.cs       inyección de dependencias, JWT, CORS, Swagger
 ```
 
