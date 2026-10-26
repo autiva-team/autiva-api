@@ -1,5 +1,7 @@
 using Autiva.Api.Filters;
+using Autiva.Api.Security;
 using Autiva.Application;
+using Autiva.Application.Interfaces;
 using Autiva.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -43,6 +45,10 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Contexto del usuario autenticado (capa de presentación)
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 // Autenticación JWT (HS256). La clave/issuer/audience vienen de configuración
 // (appsettings / variables de App Service), nunca del código.
