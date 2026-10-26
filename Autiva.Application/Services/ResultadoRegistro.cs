@@ -13,7 +13,15 @@ public class ResultadoRegistro
 
     public string? Mensaje { get; init; }
 
+    public IReadOnlyList<string> Errores { get; init; } = Array.Empty<string>();
+
     public RegistroUsuarioResponse? Datos { get; init; }
+
+    public static ResultadoRegistro CrearValidacion(IReadOnlyList<string> errores) => new()
+    {
+        Exito = false,
+        Errores = errores
+    };
 
     public static ResultadoRegistro CrearConflicto(string mensaje) => new()
     {
