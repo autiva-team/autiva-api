@@ -14,11 +14,14 @@ public class VehiculoRepository : IVehiculoRepository
         _context = context;
     }
 
+    // La comparación de placas no distingue mayúsculas porque Azure SQL usa una
+    // collation CI (SQL_Latin1_General_CP1_CI_AS). Sin ToLower() la consulta puede
+    // usar el índice UX_vehiculo_usuario_placas.
     public Task<bool> ExistePlacasAsync(Guid usuarioId, string placas, CancellationToken cancellationToken = default) =>
         _context.Vehiculo.AnyAsync(
             v => v.UsuarioId == usuarioId &&
                  v.EliminadoEn == null &&
-                 v.Placas.ToLower() == placas.ToLower(),
+                 v.Placas == placas,
             cancellationToken);
 
     public Task<bool> TieneVehiculosAsync(Guid usuarioId, CancellationToken cancellationToken = default) =>
@@ -42,7 +45,7 @@ public class VehiculoRepository : IVehiculoRepository
             var conflicto = await _context.Vehiculo.AnyAsync(
                 v => v.UsuarioId == vehiculo.UsuarioId &&
                      v.EliminadoEn == null &&
-                     v.Placas.ToLower() == vehiculo.Placas.ToLower(),
+                     v.Placas == vehiculo.Placas,
                 cancellationToken);
 
             if (conflicto)
