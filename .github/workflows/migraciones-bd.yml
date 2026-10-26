@@ -49,7 +49,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           mkdir liquibase
-          curl -sSL "https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.tar.gz" \
+                      curl --proto "=https" --tlsv1.2 -sSL "https://github.com/liquibase/...
             | tar -xz -C liquibase
           echo "${{ runner.temp }}/liquibase" >> "$GITHUB_PATH"
 
