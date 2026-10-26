@@ -1,0 +1,27 @@
+# =============================================================================
+# Changelog maestro de Autiva (Liquibase)
+# -----------------------------------------------------------------------------
+# Lista, en orden, todas las migraciones de la base de datos. Liquibase las
+# aplica de arriba hacia abajo y registra cada una en la tabla DATABASECHANGELOG.
+#
+# Reglas del equipo:
+#   - Una migración ya aplicada NO se edita: los cambios nuevos van en un
+#     archivo nuevo con el siguiente número (004-..., 005-...).
+#   - Toda migración lleva su bloque --rollback.
+# =============================================================================
+databaseChangeLog:
+  # Esquema que ya existía antes de usar Liquibase (script original del equipo).
+  - include:
+      file: 000-linea-base.sql
+      relativeToChangelogFile: true
+
+  # HU-027 Recuperar contraseña
+  - include:
+      file: 001-crear-tabla-token-recuperacion.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 002-agregar-columna-contrasena-actualizada-en.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 003-crear-indices-restriccion-token-recuperacion.sql
+      relativeToChangelogFile: true

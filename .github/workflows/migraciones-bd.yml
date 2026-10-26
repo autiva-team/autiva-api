@@ -1,0 +1,99 @@
+# =============================================================================
+# Migraciones de base de datos con Liquibase - autiva-api
+# -----------------------------------------------------------------------------
+# Prueba TODAS las migraciones en una base limpia y desechable:
+#   1. Levanta un SQL Server 2022 temporal dentro del runner (se borra al terminar).
+#   2. Valida el changelog y muestra los cambios pendientes.
+#   3. Aplica todas las migraciones desde cero (línea base + 001, 002, 003).
+#   4. Revierte la última migración, comprueba que se deshizo y la reaplica.
+# No usa la base de Azure: la contraseña del SQL Server temporal se genera al
+# azar en cada ejecución y se oculta en el log, así que no hay credenciales
+# en el repositorio.
+# =============================================================================
+name: Migraciones de BD (Liquibase)
+
+on:
+  push:
+    branches: [develop]
+    paths: ['db/**', '.github/workflows/migraciones-bd.yml']
+  pull_request:
+    paths: ['db/**', '.github/workflows/migraciones-bd.yml']
+  workflow_dispatch:   # permite ejecutarlo a mano desde la pestaña Actions
+
+env:
+  LIQUIBASE_VERSION: 4.33.0
+  LIQUIBASE_COMMAND_CHANGELOG_FILE: changelog/db.changelog-master.yaml
+  LIQUIBASE_COMMAND_URL: jdbc:sqlserver://localhost:1433;databaseName=autiva_ci;encrypt=true;trustServerCertificate=true
+  LIQUIBASE_COMMAND_USERNAME: sa
+  LIQUIBASE_SHOW_BANNER: 'false'
+
+jobs:
+  migraciones:
+    name: Aplicar, revertir y reaplicar migraciones
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: db
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17 (requerido por Liquibase)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar Liquibase ${{ env.LIQUIBASE_VERSION }}
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir liquibase
+          curl --proto "=https" --tlsv1.2 -sSL "https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.tar.gz" \
+            | tar -xz -C liquibase
+          echo "${{ runner.temp }}/liquibase" >> "$GITHUB_PATH"
+
+      - name: Levantar SQL Server temporal y crear base limpia
+        run: |
+          SA_PASSWORD="Ci-$(openssl rand -hex 16)-Aa1"
+          echo "::add-mask::$SA_PASSWORD"
+          echo "LIQUIBASE_COMMAND_PASSWORD=$SA_PASSWORD" >> "$GITHUB_ENV"
+          docker run -d --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$SA_PASSWORD" \
+            -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 40); do
+            docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" \
+              -Q "SELECT 1" -b -o /dev/null && break
+            sleep 3
+          done
+          docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" -b \
+            -Q "CREATE DATABASE autiva_ci COLLATE SQL_Latin1_General_CP1_CI_AS"
+
+      - name: Validar el changelog
+        run: liquibase validate
+
+      - name: Cambios pendientes antes de migrar
+        run: liquibase status --verbose
+
+      - name: Aplicar todas las migraciones desde una base limpia
+        run: liquibase update
+
+      - name: Historial de cambios aplicados
+        run: liquibase history
+
+      - name: Revertir la última migración (rollback)
+        run: |
+          liquibase rollback-count --count=1
+          liquibase status --verbose
+
+      - name: Comprobar que los índices y la restricción se eliminaron
+        run: |
+          docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$LIQUIBASE_COMMAND_PASSWORD" -d autiva_ci -b -Q "
+            SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.token_recuperacion') AND (name LIKE 'UX[_]%' OR name LIKE 'IX[_]%')
+            UNION ALL
+            SELECT name FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('dbo.token_recuperacion')"
+
+      - name: Reaplicar la migración revertida
+        run: |
+          liquibase update
+          liquibase status --verbose
+          liquibase history
