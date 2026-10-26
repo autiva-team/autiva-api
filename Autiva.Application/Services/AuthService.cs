@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using Autiva.Application.Dtos;
 using Autiva.Application.Interfaces;
 using Autiva.Domain.Entities;
@@ -32,6 +33,11 @@ public class AuthService : IAuthService
         var nombre = solicitud.Nombre?.Trim() ?? string.Empty;
         var correo = solicitud.Correo?.Trim().ToLowerInvariant() ?? string.Empty;
         var contrasena = solicitud.Contrasena ?? string.Empty;
+
+        var errores = ValidarRegistro(nombre, correo, contrasena);
+
+        if (errores.Count > 0)
+            return ResultadoRegistro.CrearValidacion(errores);
 
         var existe = await _usuarioRepository.ExisteCorreoAsync(correo, cancellationToken);
 
@@ -97,5 +103,31 @@ public class AuthService : IAuthService
         };
 
         return ResultadoLogin.CrearExito(datos);
+    }
+
+    private static List<string> ValidarRegistro(string nombre, string correo, string contrasena)
+    {
+        var errores = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(nombre))
+            errores.Add("El nombre es obligatorio.");
+        else if (nombre.Length > 120)
+            errores.Add("El nombre no puede superar los 120 caracteres.");
+
+        if (string.IsNullOrWhiteSpace(correo))
+            errores.Add("El correo es obligatorio.");
+        else if (correo.Length > 150)
+            errores.Add("El correo no puede superar los 150 caracteres.");
+        else if (!MailAddress.TryCreate(correo, out _))
+            errores.Add("El correo no tiene un formato válido.");
+
+        if (string.IsNullOrWhiteSpace(contrasena))
+            errores.Add("La contraseña es obligatoria.");
+        else if (contrasena.Length < 8)
+            errores.Add("La contraseña debe tener al menos 8 caracteres.");
+        else if (contrasena.Length > 72)
+            errores.Add("La contraseña no puede superar los 72 caracteres (límite de BCrypt).");
+
+        return errores;
     }
 }
