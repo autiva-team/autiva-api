@@ -110,4 +110,34 @@ public class VehiculosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Actualiza el odómetro actual de un vehículo del usuario del token.
+    /// Rechaza valores negativos o menores al odómetro actual.
+    /// </summary>
+    [HttpPatch("{id:guid}/odometro")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ActualizarOdometro(
+        Guid id,
+        [FromBody] ActualizarOdometroRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.ActualizarOdometroAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            if (resultado.Validacion)
+                return BadRequest(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
 }

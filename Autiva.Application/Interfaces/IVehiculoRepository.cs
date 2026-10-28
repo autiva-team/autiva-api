@@ -40,4 +40,9 @@ public interface IVehiculoRepository
     /// <paramref name="vehiculoId"/> como el nuevo activo, en una sola transacción.
     /// </summary>
     Task<Vehiculo> MarcarActivoAsync(Guid usuarioId, Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Actualiza el odómetro actual del vehículo.
+    /// </summary>
+    Task<Vehiculo> ActualizarOdometroAsync(Guid usuarioId, Guid vehiculoId, int nuevoOdometro, CancellationToken cancellationToken = default);
 }

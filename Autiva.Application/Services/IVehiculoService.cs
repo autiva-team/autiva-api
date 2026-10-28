@@ -23,4 +23,10 @@ public interface IVehiculoService
     Task<ResultadoVehiculoDetalle> MarcarActivoAsync(
         Guid vehiculoId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Actualiza el odómetro de un vehículo del usuario del token.</summary>
+    Task<ResultadoVehiculoDetalle> ActualizarOdometroAsync(
+        Guid vehiculoId,
+        ActualizarOdometroRequest solicitud,
+        CancellationToken cancellationToken = default);
 }

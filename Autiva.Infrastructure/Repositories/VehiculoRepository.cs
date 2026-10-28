@@ -109,4 +109,17 @@ public class VehiculoRepository : IVehiculoRepository
             return nuevo;
         });
     }
+
+    public async Task<Vehiculo> ActualizarOdometroAsync(Guid usuarioId, Guid vehiculoId, int nuevoOdometro, CancellationToken cancellationToken = default)
+    {
+        var vehiculo = await _context.Vehiculo.FirstAsync(
+            v => v.Id == vehiculoId && v.UsuarioId == usuarioId,
+            cancellationToken);
+
+        vehiculo.OdometroActual = nuevoOdometro;
+        vehiculo.ActualizadoEn = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return vehiculo;
+    }
 }
