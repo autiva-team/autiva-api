@@ -93,6 +93,65 @@ public class VehiculoService : IVehiculoService
         return ResultadoVehiculo.CrearExito(respuesta);
     }
 
+    public async Task<ResultadoListaVehiculos> ListarAsync(CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoListaVehiculos.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculos = await _vehiculoRepository.ListarAsync(usuarioId.Value, cancellationToken);
+
+        var datos = vehiculos.Select(MapearResumen).ToList();
+
+        return ResultadoListaVehiculos.CrearExito(datos);
+    }
+
+    public async Task<ResultadoVehiculoDetalle> ObtenerDetalleAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoVehiculoDetalle.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoVehiculoDetalle.CrearNoEncontrado("No se encontró el vehículo.");
+
+        return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
+    }
+
+    private static VehiculoResumenDto MapearResumen(Vehiculo vehiculo) => new()
+    {
+        Id = vehiculo.Id,
+        Marca = vehiculo.Marca,
+        Modelo = vehiculo.Modelo,
+        Placas = vehiculo.Placas,
+        OdometroActual = vehiculo.OdometroActual,
+        Estatus = vehiculo.Estatus,
+        EsPrincipal = vehiculo.EsPrincipal
+    };
+
+    private static VehiculoResponse MapearDetalle(Vehiculo vehiculo) => new()
+    {
+        Id = vehiculo.Id,
+        Marca = vehiculo.Marca,
+        Modelo = vehiculo.Modelo,
+        Anio = vehiculo.Anio,
+        Placas = vehiculo.Placas,
+        Color = vehiculo.Color,
+        KilometrajeInicial = vehiculo.KilometrajeInicial,
+        OdometroActual = vehiculo.OdometroActual,
+        Estatus = vehiculo.Estatus,
+        EsPrincipal = vehiculo.EsPrincipal,
+        FotoUrl = vehiculo.FotoUrl,
+        CreadoEn = vehiculo.CreadoEn
+    };
+
     private static List<string> Validar(
         string marca,
         string modelo,

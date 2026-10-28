@@ -54,4 +54,20 @@ public class VehiculoRepository : IVehiculoRepository
             throw;
         }
     }
+
+    public async Task<IReadOnlyList<Vehiculo>> ListarAsync(Guid usuarioId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Vehiculo
+            .Where(v => v.UsuarioId == usuarioId && v.EliminadoEn == null)
+            .OrderByDescending(v => v.EsPrincipal)
+            .ThenByDescending(v => v.CreadoEn)
+            .ToListAsync(cancellationToken);
+    }
+
+    // El filtro por UsuarioId va en la misma consulta para que "no existe" y
+    // "es de otro usuario" devuelvan lo mismo (null) y no se pueda distinguir.
+    public Task<Vehiculo?> ObtenerDetalleAsync(Guid usuarioId, Guid vehiculoId, CancellationToken cancellationToken = default) =>
+        _context.Vehiculo.FirstOrDefaultAsync(
+            v => v.Id == vehiculoId && v.UsuarioId == usuarioId && v.EliminadoEn == null,
+            cancellationToken);
 }
