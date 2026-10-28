@@ -48,4 +48,96 @@ public class VehiculosController : ControllerBase
 
         return Created($"/api/vehiculos/{resultado.Datos!.Id}", resultado.Datos);
     }
+
+    /// <summary>
+    /// Lista los vehículos del usuario del token: el activo primero y luego
+    /// del más reciente al más antiguo. Vacía si no tiene ninguno.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<VehiculoResumenDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Listar(CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.ListarAsync(cancellationToken);
+
+        if (!resultado.Exito)
+            return Unauthorized(new { mensaje = resultado.Mensaje });
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Devuelve el expediente (detalle) de un vehículo del usuario del token.
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerDetalle(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.ObtenerDetalleAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Marca un vehículo del usuario del token como el activo y desmarca el anterior.
+    /// Si ya era el activo, regresa éxito sin cambiar nada.
+    /// </summary>
+    [HttpPatch("{id:guid}/activo")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarcarActivo(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.MarcarActivoAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Actualiza el odómetro actual de un vehículo del usuario del token.
+    /// Rechaza valores negativos o menores al odómetro actual.
+    /// </summary>
+    [HttpPatch("{id:guid}/odometro")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ActualizarOdometro(
+        Guid id,
+        [FromBody] ActualizarOdometroRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.ActualizarOdometroAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            if (resultado.Validacion)
+                return BadRequest(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
 }
