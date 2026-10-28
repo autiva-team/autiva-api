@@ -13,6 +13,8 @@ public class ResultadoVehiculoDetalle
 
     public bool NoEncontrado { get; init; }
 
+    public bool Validacion { get; init; }
+
     public string? Mensaje { get; init; }
 
     public VehiculoResponse? Datos { get; init; }
@@ -28,6 +30,13 @@ public class ResultadoVehiculoDetalle
     {
         Exito = false,
         NoEncontrado = true,
+        Mensaje = mensaje
+    };
+
+    public static ResultadoVehiculoDetalle CrearValidacion(string mensaje) => new()
+    {
+        Exito = false,
+        Validacion = true,
         Mensaje = mensaje
     };
 
