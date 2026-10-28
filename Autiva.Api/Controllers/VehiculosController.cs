@@ -87,4 +87,27 @@ public class VehiculosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Marca un vehículo del usuario del token como el activo y desmarca el anterior.
+    /// Si ya era el activo, regresa éxito sin cambiar nada.
+    /// </summary>
+    [HttpPatch("{id:guid}/activo")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarcarActivo(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.MarcarActivoAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
 }
