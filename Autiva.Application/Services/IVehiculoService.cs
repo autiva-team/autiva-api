@@ -18,4 +18,9 @@ public interface IVehiculoService
     Task<ResultadoVehiculoDetalle> ObtenerDetalleAsync(
         Guid vehiculoId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Marca un vehículo del usuario del token como el activo (es_principal).</summary>
+    Task<ResultadoVehiculoDetalle> MarcarActivoAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default);
 }

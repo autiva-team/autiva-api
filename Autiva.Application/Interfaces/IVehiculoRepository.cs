@@ -34,4 +34,10 @@ public interface IVehiculoRepository
     /// de lo contrario <c>null</c>, sin distinguir el motivo.
     /// </summary>
     Task<Vehiculo?> ObtenerDetalleAsync(Guid usuarioId, Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Desmarca el vehículo activo anterior del usuario (si había uno) y marca
+    /// <paramref name="vehiculoId"/> como el nuevo activo, en una sola transacción.
+    /// </summary>
+    Task<Vehiculo> MarcarActivoAsync(Guid usuarioId, Guid vehiculoId, CancellationToken cancellationToken = default);
 }

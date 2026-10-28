@@ -125,6 +125,30 @@ public class VehiculoService : IVehiculoService
         return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
     }
 
+    public async Task<ResultadoVehiculoDetalle> MarcarActivoAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoVehiculoDetalle.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoVehiculoDetalle.CrearNoEncontrado("No se encontró el vehículo.");
+
+        // Ya es el activo: éxito sin tocar nada.
+        if (vehiculo.EsPrincipal)
+            return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
+
+        var actualizado = await _vehiculoRepository.MarcarActivoAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(actualizado));
+    }
+
     private static VehiculoResumenDto MapearResumen(Vehiculo vehiculo) => new()
     {
         Id = vehiculo.Id,

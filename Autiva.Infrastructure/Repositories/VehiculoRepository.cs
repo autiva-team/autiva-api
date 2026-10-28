@@ -70,4 +70,43 @@ public class VehiculoRepository : IVehiculoRepository
         _context.Vehiculo.FirstOrDefaultAsync(
             v => v.Id == vehiculoId && v.UsuarioId == usuarioId && v.EliminadoEn == null,
             cancellationToken);
+
+    public async Task<Vehiculo> MarcarActivoAsync(Guid usuarioId, Guid vehiculoId, CancellationToken cancellationToken = default)
+    {
+        var estrategia = _context.Database.CreateExecutionStrategy();
+
+        // CreateExecutionStrategy envuelve la transacción completa porque el
+        // DbContext tiene EnableRetryOnFailure: si hay un fallo transitorio,
+        // reintenta desde el BeginTransaction, no solo el SaveChanges.
+        return await estrategia.ExecuteAsync(async () =>
+        {
+            await using var transaccion = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // El índice único filtrado UX_vehiculo_principal solo permite un
+            // es_principal = 1 por usuario: primero se desmarca el anterior y
+            // se guarda, y hasta entonces se marca el nuevo.
+            var anterior = await _context.Vehiculo.FirstOrDefaultAsync(
+                v => v.UsuarioId == usuarioId && v.EsPrincipal && v.EliminadoEn == null,
+                cancellationToken);
+
+            if (anterior is not null)
+            {
+                anterior.EsPrincipal = false;
+                anterior.ActualizadoEn = DateTime.UtcNow;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            var nuevo = await _context.Vehiculo.FirstAsync(
+                v => v.Id == vehiculoId && v.UsuarioId == usuarioId,
+                cancellationToken);
+
+            nuevo.EsPrincipal = true;
+            nuevo.ActualizadoEn = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await transaccion.CommitAsync(cancellationToken);
+
+            return nuevo;
+        });
+    }
 }
