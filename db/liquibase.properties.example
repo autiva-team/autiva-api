@@ -1,0 +1,18 @@
+# =============================================================================
+# Configuración local de Liquibase - PLANTILLA
+# -----------------------------------------------------------------------------
+# 1. Copiar este archivo como db/liquibase.properties (ya está en .gitignore).
+# 2. Cambiar <servidor> y <base> por los de la base de DESARROLLO.
+# 3. NO escribir la contraseña aquí: definirla en la terminal como variable
+#    de entorno LIQUIBASE_COMMAND_PASSWORD (ver README).
+# =============================================================================
+changelog-file: changelog/db.changelog-master.yaml
+
+# Azure SQL Database (base de desarrollo, por ejemplo autivadb-dev)
+url: jdbc:sqlserver://<servidor>.database.windows.net:1433;databaseName=<base>;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;
+
+# Usuario SQL con permisos de DDL sobre la base de desarrollo
+username: <usuario>
+
+# Ocultar el banner de Liquibase en la consola
+liquibase.showBanner: false

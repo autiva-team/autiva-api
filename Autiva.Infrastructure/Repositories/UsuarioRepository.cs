@@ -14,11 +14,14 @@ public class UsuarioRepository : IUsuarioRepository
         _context = context;
     }
 
+    // La comparación del correo no distingue mayúsculas porque Azure SQL usa una
+    // collation CI (SQL_Latin1_General_CP1_CI_AS). Sin ToLower() la consulta puede
+    // usar el índice UQ_usuario_correo.
     public Task<bool> ExisteCorreoAsync(string correo, CancellationToken cancellationToken = default) =>
-        _context.Usuario.AnyAsync(u => u.Correo.ToLower() == correo, cancellationToken);
+        _context.Usuario.AnyAsync(u => u.Correo == correo, cancellationToken);
 
     public Task<Usuario?> ObtenerPorCorreoAsync(string correo, CancellationToken cancellationToken = default) =>
-        _context.Usuario.FirstOrDefaultAsync(u => u.Correo.ToLower() == correo, cancellationToken);
+        _context.Usuario.FirstOrDefaultAsync(u => u.Correo == correo, cancellationToken);
 
     public async Task<bool> AgregarAsync(Usuario usuario, CancellationToken cancellationToken = default)
     {
@@ -35,7 +38,7 @@ public class UsuarioRepository : IUsuarioRepository
             // el mismo correo entre la validación anterior y el guardado.
             var correo = usuario.Correo;
             var conflicto = await _context.Usuario
-                .AnyAsync(u => u.Correo.ToLower() == correo, cancellationToken);
+                .AnyAsync(u => u.Correo == correo, cancellationToken);
 
             if (conflicto)
                 return false;

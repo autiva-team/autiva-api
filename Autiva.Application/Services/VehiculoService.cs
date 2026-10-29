@@ -93,6 +93,124 @@ public class VehiculoService : IVehiculoService
         return ResultadoVehiculo.CrearExito(respuesta);
     }
 
+    public async Task<ResultadoListaVehiculos> ListarAsync(CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoListaVehiculos.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculos = await _vehiculoRepository.ListarAsync(usuarioId.Value, cancellationToken);
+
+        var datos = vehiculos.Select(MapearResumen).ToList();
+
+        return ResultadoListaVehiculos.CrearExito(datos);
+    }
+
+    public async Task<ResultadoVehiculoDetalle> ObtenerDetalleAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoVehiculoDetalle.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoVehiculoDetalle.CrearNoEncontrado("No se encontró el vehículo.");
+
+        return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
+    }
+
+    public async Task<ResultadoVehiculoDetalle> MarcarActivoAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoVehiculoDetalle.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoVehiculoDetalle.CrearNoEncontrado("No se encontró el vehículo.");
+
+        // Ya es el activo: éxito sin tocar nada.
+        if (vehiculo.EsPrincipal)
+            return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
+
+        var actualizado = await _vehiculoRepository.MarcarActivoAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(actualizado));
+    }
+
+    public async Task<ResultadoVehiculoDetalle> ActualizarOdometroAsync(
+        Guid vehiculoId,
+        ActualizarOdometroRequest solicitud,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoVehiculoDetalle.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoVehiculoDetalle.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var nuevoOdometro = solicitud?.OdometroActual ?? 0;
+
+        if (nuevoOdometro < 0)
+            return ResultadoVehiculoDetalle.CrearValidacion("El odómetro no puede ser negativo.");
+
+        if (nuevoOdometro < vehiculo.OdometroActual)
+            return ResultadoVehiculoDetalle.CrearValidacion(
+                $"El odómetro no puede ser menor al actual ({vehiculo.OdometroActual} km).");
+
+        // Igual al actual: éxito sin tocar la base.
+        if (nuevoOdometro == vehiculo.OdometroActual)
+            return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(vehiculo));
+
+        var actualizado = await _vehiculoRepository.ActualizarOdometroAsync(
+            usuarioId.Value, vehiculoId, nuevoOdometro, cancellationToken);
+
+        return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(actualizado));
+    }
+
+    private static VehiculoResumenDto MapearResumen(Vehiculo vehiculo) => new()
+    {
+        Id = vehiculo.Id,
+        Marca = vehiculo.Marca,
+        Modelo = vehiculo.Modelo,
+        Placas = vehiculo.Placas,
+        OdometroActual = vehiculo.OdometroActual,
+        Estatus = vehiculo.Estatus,
+        EsPrincipal = vehiculo.EsPrincipal
+    };
+
+    private static VehiculoResponse MapearDetalle(Vehiculo vehiculo) => new()
+    {
+        Id = vehiculo.Id,
+        Marca = vehiculo.Marca,
+        Modelo = vehiculo.Modelo,
+        Anio = vehiculo.Anio,
+        Placas = vehiculo.Placas,
+        Color = vehiculo.Color,
+        KilometrajeInicial = vehiculo.KilometrajeInicial,
+        OdometroActual = vehiculo.OdometroActual,
+        Estatus = vehiculo.Estatus,
+        EsPrincipal = vehiculo.EsPrincipal,
+        FotoUrl = vehiculo.FotoUrl,
+        CreadoEn = vehiculo.CreadoEn
+    };
+
     private static List<string> Validar(
         string marca,
         string modelo,
