@@ -1,0 +1,53 @@
+# =============================================================================
+# Análisis de calidad de código con SonarQube Cloud - autiva-api (ASP.NET 8)
+# -----------------------------------------------------------------------------
+# Se ejecuta automáticamente:
+#   - en cada push a develop (rama principal del proyecto en SonarQube Cloud)
+#   - en cada Pull Request (SonarQube comenta el resultado del Quality Gate)
+# El token se lee del secreto SONAR_TOKEN; nunca se escribe en el código.
+# =============================================================================
+name: Calidad de código (SonarQube Cloud)
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:   # permite ejecutarlo a mano desde la pestaña Actions
+
+jobs:
+  sonarqube:
+    name: Análisis SonarQube Cloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historial completo: SonarQube lo usa para detectar código nuevo
+
+      - name: Instalar Java 17 (requerido por el scanner)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Instalar SonarScanner para .NET
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Compilar y analizar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet-sonarscanner begin \
+            /k:"autiva-team_autiva-api" \
+            /o:"autiva-team" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.host.url="https://sonarcloud.io"
+          dotnet build Autiva.Api/Autiva.Api.sln --configuration Release
+          dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"

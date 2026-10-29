@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Liquibase: configuración local con datos de conexión (usar la plantilla .example)
+db/liquibase.properties
+
+# Claude Code: overrides locales de permisos, no se comparten con el equipo
+.claude/settings.local.json
