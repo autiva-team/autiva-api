@@ -29,6 +29,27 @@ public interface ICargaRepository
     Task<IReadOnlyList<CargaCombustible>> ListarNoEliminadasAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Carga no eliminada del vehículo, estrictamente anterior (por fecha y, si hay empate,
+    /// por odómetro) a <paramref name="fechaHora"/>/<paramref name="odometro"/>; null si es la
+    /// primera carga. Se usa para calcular los km recorridos de una carga puntual.
+    /// </summary>
+    Task<CargaCombustible?> ObtenerAnteriorAsync(Guid vehiculoId, DateTime fechaHora, int odometro, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Carga no eliminada por id, de un vehículo no eliminado del usuario; null si no existe,
+    /// está eliminada o es de otro usuario (mismo resultado, sin distinguir el motivo).
+    /// </summary>
+    Task<CargaCombustible?> ObtenerPorUsuarioAsync(Guid usuarioId, Guid cargaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Historial paginado (más reciente primero) de las cargas no eliminadas del vehículo,
+    /// con filtro opcional de fechas. Devuelve también el total de registros que cumplen el
+    /// filtro (antes de paginar), para calcular el total de páginas.
+    /// </summary>
+    Task<(IReadOnlyList<CargaCombustible> Items, int TotalRegistros)> ListarHistorialAsync(
+        Guid vehiculoId, int pagina, int tamano, DateTime? desde, DateTime? hasta, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Guarda la carga y, si su odómetro es mayor al actual del vehículo, actualiza
     /// <c>odometro_actual</c>, todo en una sola transacción. Devuelve <c>null</c> si el guardado
     /// falló por un conflicto de id duplicado (carrera sobre la llave primaria).

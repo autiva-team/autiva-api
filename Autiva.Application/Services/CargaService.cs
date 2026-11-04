@@ -106,25 +106,126 @@ public class CargaService : ICargaService
         if (guardada is null)
             return ResultadoCarga.CrearConflicto("La carga ya fue registrada.");
 
-        var respuesta = new CargaResponse
+        return ResultadoCarga.CrearExito(MapearRespuesta(guardada, tipoCombustible!.Nombre, kmRecorridos));
+    }
+
+    public async Task<ResultadoHistorialCargas> ObtenerHistorialAsync(
+        Guid vehiculoId,
+        int pagina,
+        int tamano,
+        DateTime? desde,
+        DateTime? hasta,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoHistorialCargas.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminado o es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoHistorialCargas.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var errorFechas = ValidarFechas(desde, hasta);
+
+        if (errorFechas is not null)
+            return ResultadoHistorialCargas.CrearValidacion(errorFechas);
+
+        (pagina, tamano) = NormalizarPaginacion(pagina, tamano);
+
+        var (cargas, totalRegistros) = await _cargaRepository.ListarHistorialAsync(
+            vehiculoId, pagina, tamano, desde, hasta, cancellationToken);
+
+        var items = await MapearHistorialAsync(vehiculoId, cargas, cancellationToken);
+
+        var datos = new ResultadoPaginado<CargaResponse>
         {
-            Id = guardada.Id,
-            VehiculoId = guardada.VehiculoId,
-            TipoCombustible = tipoCombustible!.Nombre,
-            FechaHora = guardada.FechaHora,
-            Litros = guardada.Litros,
-            CostoTotal = guardada.CostoTotal,
-            PrecioPorLitro = Math.Round(guardada.CostoTotal / guardada.Litros, 2),
-            Odometro = guardada.Odometro,
-            KmRecorridos = kmRecorridos,
-            TanqueLleno = guardada.TanqueLleno,
-            RendimientoKml = guardada.RendimientoKml,
-            Gasolinera = guardada.Gasolinera,
-            Notas = guardada.Notas
+            Items = items,
+            Pagina = pagina,
+            Tamano = tamano,
+            TotalRegistros = totalRegistros,
+            TotalPaginas = CalcularTotalPaginas(totalRegistros, tamano)
         };
 
-        return ResultadoCarga.CrearExito(respuesta);
+        return ResultadoHistorialCargas.CrearExito(datos);
     }
+
+    public async Task<ResultadoCarga> ObtenerDetalleAsync(Guid cargaId, CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoCarga.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var carga = await _cargaRepository.ObtenerPorUsuarioAsync(usuarioId.Value, cargaId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminada o es de otro usuario: no se revela cuál es el caso.
+        if (carga is null)
+            return ResultadoCarga.CrearNoEncontrado("No se encontró la carga.");
+
+        var anterior = await _cargaRepository.ObtenerAnteriorAsync(
+            carga.VehiculoId, carga.FechaHora, carga.Odometro, cancellationToken);
+
+        return ResultadoCarga.CrearExito(MapearRespuesta(carga, carga.TipoCombustible.Nombre, CalcularKmRecorridos(carga, anterior)));
+    }
+
+    /// <summary>
+    /// Mapea cada carga a su <see cref="CargaResponse"/> calculando los km recorridos contra
+    /// la anterior. Las cargas vienen de más reciente a más antigua: la anterior de cada una
+    /// es la siguiente en esta misma lista, salvo la última de la página, que puede estar en
+    /// la página siguiente y hay que buscarla en la base.
+    /// </summary>
+    private async Task<List<CargaResponse>> MapearHistorialAsync(
+        Guid vehiculoId, IReadOnlyList<CargaCombustible> cargas, CancellationToken cancellationToken)
+    {
+        var items = new List<CargaResponse>(cargas.Count);
+
+        for (var i = 0; i < cargas.Count; i++)
+        {
+            var anterior = i + 1 < cargas.Count
+                ? cargas[i + 1]
+                : await _cargaRepository.ObtenerAnteriorAsync(
+                    vehiculoId, cargas[i].FechaHora, cargas[i].Odometro, cancellationToken);
+
+            items.Add(MapearRespuesta(cargas[i], cargas[i].TipoCombustible.Nombre, CalcularKmRecorridos(cargas[i], anterior)));
+        }
+
+        return items;
+    }
+
+    private static CargaResponse MapearRespuesta(CargaCombustible carga, string tipoCombustibleNombre, int? kmRecorridos) => new()
+    {
+        Id = carga.Id,
+        VehiculoId = carga.VehiculoId,
+        TipoCombustible = tipoCombustibleNombre,
+        FechaHora = carga.FechaHora,
+        Litros = carga.Litros,
+        CostoTotal = carga.CostoTotal,
+        PrecioPorLitro = Math.Round(carga.CostoTotal / carga.Litros, 2),
+        Odometro = carga.Odometro,
+        KmRecorridos = kmRecorridos,
+        TanqueLleno = carga.TanqueLleno,
+        RendimientoKml = carga.RendimientoKml,
+        Gasolinera = carga.Gasolinera,
+        Notas = carga.Notas
+    };
+
+    private static int? CalcularKmRecorridos(CargaCombustible carga, CargaCombustible? anterior) =>
+        anterior is null ? null : carga.Odometro - anterior.Odometro;
+
+    /// <summary>Error si "desde" es mayor a "hasta"; null si las fechas son válidas.</summary>
+    private static string? ValidarFechas(DateTime? desde, DateTime? hasta) =>
+        desde is not null && hasta is not null && desde > hasta
+            ? "La fecha 'desde' no puede ser mayor a 'hasta'."
+            : null;
+
+    private static (int Pagina, int Tamano) NormalizarPaginacion(int pagina, int tamano) =>
+        (Math.Max(pagina, 1), Math.Clamp(tamano, 1, 50));
+
+    private static int CalcularTotalPaginas(int totalRegistros, int tamano) =>
+        totalRegistros == 0 ? 0 : (int)Math.Ceiling(totalRegistros / (double)tamano);
 
     private static List<string> ValidarCamposBasicos(
         decimal litros,
