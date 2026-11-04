@@ -39,6 +39,11 @@ public class CargaRepository : ICargaRepository
             .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null && c.FechaHora > fechaHoraDesde)
             .SumAsync(c => c.Litros, cancellationToken);
 
+    public async Task<IReadOnlyList<CargaCombustible>> ListarNoEliminadasAsync(Guid vehiculoId, CancellationToken cancellationToken = default) =>
+        await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+
     public async Task<CargaCombustible?> RegistrarAsync(CargaCombustible carga, Guid vehiculoId, CancellationToken cancellationToken = default)
     {
         var estrategia = _context.Database.CreateExecutionStrategy();

@@ -14,10 +14,12 @@ namespace Autiva.Api.Controllers;
 public class CargasController : ControllerBase
 {
     private readonly ICargaService _cargaService;
+    private readonly IRendimientoService _rendimientoService;
 
-    public CargasController(ICargaService cargaService)
+    public CargasController(ICargaService cargaService, IRendimientoService rendimientoService)
     {
         _cargaService = cargaService;
+        _rendimientoService = rendimientoService;
     }
 
     /// <summary>
@@ -52,5 +54,28 @@ public class CargasController : ControllerBase
         }
 
         return Created($"/api/vehiculos/{vehiculoId}/cargas/{resultado.Datos!.Id}", resultado.Datos);
+    }
+
+    /// <summary>
+    /// Rendimiento (km/L) y gasto de combustible del vehículo: promedio general,
+    /// variación contra el mes anterior, gasto del mes actual y autonomía estimada.
+    /// </summary>
+    [HttpGet("rendimiento")]
+    [ProducesResponseType(typeof(RendimientoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerRendimiento(Guid vehiculoId, CancellationToken cancellationToken)
+    {
+        var resultado = await _rendimientoService.ObtenerAsync(vehiculoId, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
     }
 }
