@@ -39,6 +39,52 @@ public class CargaRepository : ICargaRepository
             .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null && c.FechaHora > fechaHoraDesde)
             .SumAsync(c => c.Litros, cancellationToken);
 
+    public async Task<IReadOnlyList<CargaCombustible>> ListarNoEliminadasAsync(Guid vehiculoId, CancellationToken cancellationToken = default) =>
+        await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+
+    public Task<CargaCombustible?> ObtenerAnteriorAsync(Guid vehiculoId, DateTime fechaHora, int odometro, CancellationToken cancellationToken = default) =>
+        _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null &&
+                (c.FechaHora < fechaHora || (c.FechaHora == fechaHora && c.Odometro < odometro)))
+            .OrderByDescending(c => c.FechaHora)
+            .ThenByDescending(c => c.Odometro)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<CargaCombustible?> ObtenerPorUsuarioAsync(Guid usuarioId, Guid cargaId, CancellationToken cancellationToken = default) =>
+        _context.CargaCombustible
+            .Include(c => c.TipoCombustible)
+            .FirstOrDefaultAsync(
+                c => c.Id == cargaId && c.EliminadoEn == null &&
+                     c.Vehiculo.UsuarioId == usuarioId && c.Vehiculo.EliminadoEn == null,
+                cancellationToken);
+
+    public async Task<(IReadOnlyList<CargaCombustible> Items, int TotalRegistros)> ListarHistorialAsync(
+        Guid vehiculoId, int pagina, int tamano, DateTime? desde, DateTime? hasta, CancellationToken cancellationToken = default)
+    {
+        var consulta = _context.CargaCombustible
+            .Include(c => c.TipoCombustible)
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null);
+
+        if (desde is not null)
+            consulta = consulta.Where(c => c.FechaHora >= desde.Value);
+
+        if (hasta is not null)
+            consulta = consulta.Where(c => c.FechaHora <= hasta.Value);
+
+        var totalRegistros = await consulta.CountAsync(cancellationToken);
+
+        var items = await consulta
+            .OrderByDescending(c => c.FechaHora)
+            .ThenByDescending(c => c.Odometro)
+            .Skip((pagina - 1) * tamano)
+            .Take(tamano)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalRegistros);
+    }
+
     public async Task<CargaCombustible?> RegistrarAsync(CargaCombustible carga, Guid vehiculoId, CancellationToken cancellationToken = default)
     {
         var estrategia = _context.Database.CreateExecutionStrategy();
