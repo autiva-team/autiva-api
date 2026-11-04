@@ -23,6 +23,12 @@ public interface ICargaRepository
     Task<decimal> SumarLitrosPosterioresAsync(Guid vehiculoId, DateTime fechaHoraDesde, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Todas las cargas no eliminadas del vehículo, para cálculos de rendimiento y gasto
+    /// (dashboard, estadísticas). Sin orden particular; quien llama agrupa como necesite.
+    /// </summary>
+    Task<IReadOnlyList<CargaCombustible>> ListarNoEliminadasAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Guarda la carga y, si su odómetro es mayor al actual del vehículo, actualiza
     /// <c>odometro_actual</c>, todo en una sola transacción. Devuelve <c>null</c> si el guardado
     /// falló por un conflicto de id duplicado (carrera sobre la llave primaria).
