@@ -19,4 +19,17 @@ public interface IServicioRepository
     /// falló por un conflicto de id duplicado (carrera sobre la llave primaria).
     /// </summary>
     Task<ServicioMantenimiento?> RegistrarAsync(ServicioMantenimiento servicio, Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Servicio no eliminado por id, de un vehículo no eliminado del usuario; null si no existe,
+    /// está eliminado o es de otro usuario (mismo resultado, sin distinguir el motivo).
+    /// </summary>
+    Task<ServicioMantenimiento?> ObtenerPorUsuarioAsync(Guid usuarioId, Guid servicioId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Historial paginado (más reciente primero) de los servicios no eliminados del vehículo.
+    /// Devuelve también el total de registros, para calcular el total de páginas.
+    /// </summary>
+    Task<(IReadOnlyList<ServicioMantenimiento> Items, int TotalRegistros)> ListarHistorialAsync(
+        Guid vehiculoId, int pagina, int tamano, CancellationToken cancellationToken = default);
 }

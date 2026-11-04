@@ -86,6 +86,62 @@ public class ServicioService : IServicioService
         return ResultadoServicio.CrearExito(MapearRespuesta(guardado, tipoServicio!.Nombre));
     }
 
+    public async Task<ResultadoHistorialServicios> ObtenerHistorialAsync(
+        Guid vehiculoId,
+        int pagina,
+        int tamano,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoHistorialServicios.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminado o es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoHistorialServicios.CrearNoEncontrado("No se encontró el vehículo.");
+
+        (pagina, tamano) = NormalizarPaginacion(pagina, tamano);
+
+        var (servicios, totalRegistros) = await _servicioRepository.ListarHistorialAsync(
+            vehiculoId, pagina, tamano, cancellationToken);
+
+        var datos = new ResultadoPaginado<ServicioResponse>
+        {
+            Items = servicios.Select(s => MapearRespuesta(s, s.TipoServicio.Nombre)).ToList(),
+            Pagina = pagina,
+            Tamano = tamano,
+            TotalRegistros = totalRegistros,
+            TotalPaginas = CalcularTotalPaginas(totalRegistros, tamano)
+        };
+
+        return ResultadoHistorialServicios.CrearExito(datos);
+    }
+
+    public async Task<ResultadoServicio> ObtenerDetalleAsync(Guid servicioId, CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoServicio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var servicio = await _servicioRepository.ObtenerPorUsuarioAsync(usuarioId.Value, servicioId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminado o es de otro usuario: no se revela cuál es el caso.
+        if (servicio is null)
+            return ResultadoServicio.CrearNoEncontrado("No se encontró el servicio.");
+
+        return ResultadoServicio.CrearExito(MapearRespuesta(servicio, servicio.TipoServicio.Nombre));
+    }
+
+    private static (int Pagina, int Tamano) NormalizarPaginacion(int pagina, int tamano) =>
+        (Math.Max(pagina, 1), Math.Clamp(tamano, 1, 50));
+
+    private static int CalcularTotalPaginas(int totalRegistros, int tamano) =>
+        totalRegistros == 0 ? 0 : (int)Math.Ceiling(totalRegistros / (double)tamano);
+
     private static ServicioResponse MapearRespuesta(ServicioMantenimiento servicio, string tipoServicioNombre) => new()
     {
         Id = servicio.Id,

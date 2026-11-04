@@ -58,4 +58,31 @@ public class ServicioRepository : IServicioRepository
             return servicio;
         });
     }
+
+    public Task<ServicioMantenimiento?> ObtenerPorUsuarioAsync(Guid usuarioId, Guid servicioId, CancellationToken cancellationToken = default) =>
+        _context.ServicioMantenimiento
+            .Include(s => s.TipoServicio)
+            .FirstOrDefaultAsync(
+                s => s.Id == servicioId && s.EliminadoEn == null &&
+                     s.Vehiculo.UsuarioId == usuarioId && s.Vehiculo.EliminadoEn == null,
+                cancellationToken);
+
+    public async Task<(IReadOnlyList<ServicioMantenimiento> Items, int TotalRegistros)> ListarHistorialAsync(
+        Guid vehiculoId, int pagina, int tamano, CancellationToken cancellationToken = default)
+    {
+        var consulta = _context.ServicioMantenimiento
+            .Include(s => s.TipoServicio)
+            .Where(s => s.VehiculoId == vehiculoId && s.EliminadoEn == null);
+
+        var totalRegistros = await consulta.CountAsync(cancellationToken);
+
+        var items = await consulta
+            .OrderByDescending(s => s.Fecha)
+            .ThenByDescending(s => s.KilometrajeServicio)
+            .Skip((pagina - 1) * tamano)
+            .Take(tamano)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalRegistros);
+    }
 }
