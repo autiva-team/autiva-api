@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddScoped<IVehiculoService, VehiculoService>();
         services.AddScoped<ICargaService, CargaService>();
         services.AddScoped<IRendimientoService, RendimientoService>();
+        services.AddScoped<IServicioService, ServicioService>();
 
         return services;
     }
