@@ -40,7 +40,7 @@ jobs:
       - name: Instalar SonarScanner para .NET
         run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Compilar y analizar
+      - name: Compilar, probar y analizar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
@@ -48,6 +48,10 @@ jobs:
             /k:"autiva-team_autiva-api" \
             /o:"autiva-team" \
             /d:sonar.token="$SONAR_TOKEN" \
-            /d:sonar.host.url="https://sonarcloud.io"
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.exclusions=".github/**" \
+            /d:sonar.coverage.exclusions="Autiva.Tests/**,Autiva.Infrastructure/**,Autiva.Api/**" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
           dotnet build Autiva.Api/Autiva.Api.sln --configuration Release
+          dotnet test Autiva.Tests/Autiva.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
           dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"
