@@ -24,6 +24,9 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IJwtGenerator, JwtGenerator>();
         services.AddScoped<IRecordatorioRepository, RecordatorioRepository>();
+        services.AddScoped<ISincronizacionRepository, SincronizacionRepository>();
+        services.AddScoped<IPushRepository, PushRepository>();
+        services.AddScoped<IPushSender, WebPushSender>();
 
         return services;
     }
