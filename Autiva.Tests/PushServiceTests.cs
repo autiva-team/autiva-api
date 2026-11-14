@@ -21,6 +21,167 @@ public class PushServiceTests
         _currentUserService.Object);
 
     [Fact]
+    public void ObtenerClavePublica_RegresaClaveConfigurada()
+    {
+        // Arrange
+        _pushSender.Setup(s => s.ObtenerClavePublica()).Returns("clave-vapid-publica");
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = servicio.ObtenerClavePublica();
+
+        // Assert
+        Assert.Equal("clave-vapid-publica", resultado.ClavePublica);
+    }
+
+    [Fact]
+    public async Task Suscribir_SuscripcionExistente_ActualizaDatos()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        var endpoint = "https://fcm.googleapis.com/fcm/send/existente";
+        var existente = new SuscripcionPush
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = Guid.NewGuid(), // suscripción renovada desde otro usuario/dispositivo
+            Endpoint = endpoint,
+            ClaveP256dh = "vieja",
+            ClaveAuth = "vieja",
+            Activa = false
+        };
+
+        _pushRepository
+            .Setup(r => r.ObtenerPorEndpointAsync(endpoint, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existente);
+        _pushRepository
+            .Setup(r => r.GuardarSuscripcionAsync(It.IsAny<SuscripcionPush>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SuscripcionPush s, CancellationToken _) => s);
+
+        var solicitud = new SuscripcionPushRequest
+        {
+            Endpoint = endpoint,
+            ClaveP256dh = "nueva-clave",
+            ClaveAuth = "nuevo-secreto"
+        };
+
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.SuscribirAsync(solicitud);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        Assert.Equal(UsuarioId, existente.UsuarioId);
+        Assert.Equal("nueva-clave", existente.ClaveP256dh);
+        Assert.True(existente.Activa);
+    }
+
+    [Fact]
+    public async Task Desuscribir_EndpointVacio_RegresaFalseSinLlamarRepositorio()
+    {
+        // Arrange
+        var servicio = CrearServicio();
+
+        // Act
+        var exito = await servicio.DesuscribirAsync(" ");
+
+        // Assert
+        Assert.False(exito);
+        _pushRepository.Verify(r => r.DesactivarSuscripcionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ObtenerNotificacionesAsync_UsuarioNoAutenticado_RegresaListaVacia()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerNotificacionesAsync();
+
+        // Assert
+        Assert.Empty(resultado);
+    }
+
+    [Fact]
+    public async Task ObtenerNotificacionesAsync_ConNotificaciones_RegresaListaMapeada()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        var notificacion = new Notificacion
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = UsuarioId,
+            Titulo = "Recordatorio",
+            Mensaje = "Tu verificación vence pronto",
+            FechaEnvio = DateTime.UtcNow,
+            Leida = false
+        };
+        _pushRepository
+            .Setup(r => r.ObtenerNotificacionesUsuarioAsync(UsuarioId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Notificacion> { notificacion });
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerNotificacionesAsync();
+
+        // Assert
+        Assert.Single(resultado);
+        Assert.Equal("Recordatorio", resultado[0].Titulo);
+    }
+
+    [Fact]
+    public async Task MarcarNotificacionLeidaAsync_UsuarioNoAutenticado_RegresaFalse()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var exito = await servicio.MarcarNotificacionLeidaAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(exito);
+    }
+
+    [Fact]
+    public async Task MarcarNotificacionLeidaAsync_NotificacionNoExiste_RegresaFalse()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _pushRepository
+            .Setup(r => r.ObtenerNotificacionPorIdAsync(It.IsAny<Guid>(), UsuarioId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Notificacion?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var exito = await servicio.MarcarNotificacionLeidaAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(exito);
+    }
+
+    [Fact]
+    public async Task MarcarNotificacionLeidaAsync_NotificacionExiste_RegresaTrueYMarca()
+    {
+        // Arrange
+        var notificacionId = Guid.NewGuid();
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _pushRepository
+            .Setup(r => r.ObtenerNotificacionPorIdAsync(notificacionId, UsuarioId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Notificacion { Id = notificacionId, UsuarioId = UsuarioId, Titulo = "T", Mensaje = "M" });
+        var servicio = CrearServicio();
+
+        // Act
+        var exito = await servicio.MarcarNotificacionLeidaAsync(notificacionId);
+
+        // Assert
+        Assert.True(exito);
+        _pushRepository.Verify(r => r.MarcarNotificacionLeidaAsync(notificacionId, UsuarioId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task Suscribir_UsuarioNoAutenticado_RetornaNoAutorizado()
     {
         _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);

@@ -24,15 +24,37 @@ public class SincronizacionRepository : ISincronizacionRepository
         return await _context.ServicioMantenimiento.AnyAsync(s => s.Id == id, cancellationToken);
     }
 
-    public async Task GuardarCargaAsync(CargaCombustible carga, CancellationToken cancellationToken = default)
+    public async Task<bool> GuardarCargaAsync(CargaCombustible carga, CancellationToken cancellationToken = default)
     {
         _context.CargaCombustible.Add(carga);
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // Se desvincula del change tracker para que el siguiente SaveChanges del lote
+            // no vuelva a intentar guardar esta misma carga rechazada.
+            _context.Entry(carga).State = EntityState.Detached;
+            return false;
+        }
     }
 
-    public async Task GuardarServicioAsync(ServicioMantenimiento servicio, CancellationToken cancellationToken = default)
+    public async Task<bool> GuardarServicioAsync(ServicioMantenimiento servicio, CancellationToken cancellationToken = default)
     {
         _context.ServicioMantenimiento.Add(servicio);
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            _context.Entry(servicio).State = EntityState.Detached;
+            return false;
+        }
     }
 }

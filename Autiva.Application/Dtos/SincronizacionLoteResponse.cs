@@ -15,4 +15,7 @@ public class SincronizacionLoteResponse
 
     public List<Guid> CargasSincronizadasIds { get; set; } = new();
     public List<Guid> ServiciosSincronizadosIds { get; set; } = new();
+
+    /// <summary>Registros que no se pudieron guardar, con el motivo en español.</summary>
+    public List<SincronizacionItemFallido> Fallidos { get; set; } = new();
 }

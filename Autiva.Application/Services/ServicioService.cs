@@ -46,7 +46,9 @@ public class ServicioService : IServicioService
         var folio = string.IsNullOrWhiteSpace(solicitud.Folio) ? null : solicitud.Folio.Trim();
         var notas = string.IsNullOrWhiteSpace(solicitud.Notas) ? null : solicitud.Notas.Trim();
 
-        var errores = ValidarCampos(solicitud, vehiculo.KilometrajeInicial);
+        var errores = ValidadorServicio.Validar(
+            solicitud.Costo, solicitud.KilometrajeServicio, vehiculo.KilometrajeInicial,
+            solicitud.MetaProximoKm, solicitud.Fecha, solicitud.FechaRetorno);
 
         var tipoServicio = await _servicioRepository.ObtenerTipoServicioAsync(solicitud.TipoServicioId, cancellationToken);
 
@@ -156,28 +158,4 @@ public class ServicioService : IServicioService
         Folio = servicio.Folio,
         Notas = servicio.Notas
     };
-
-    private static List<string> ValidarCampos(RegistrarServicioRequest solicitud, int kilometrajeInicialVehiculo)
-    {
-        var errores = new List<string>();
-
-        if (solicitud.Costo < 0)
-            errores.Add("El costo no puede ser negativo.");
-
-        if (solicitud.KilometrajeServicio < 0)
-            errores.Add("El kilometraje del servicio no puede ser negativo.");
-        else if (solicitud.KilometrajeServicio < kilometrajeInicialVehiculo)
-            errores.Add($"El kilometraje del servicio no puede ser menor al inicial del vehículo ({kilometrajeInicialVehiculo} km).");
-
-        if (solicitud.MetaProximoKm is not null && solicitud.MetaProximoKm <= solicitud.KilometrajeServicio)
-            errores.Add("La meta del próximo servicio debe ser mayor al kilometraje del servicio.");
-
-        if (solicitud.FechaRetorno is not null && solicitud.FechaRetorno < solicitud.Fecha)
-            errores.Add("La fecha de retorno no puede ser anterior a la fecha del servicio.");
-
-        if (solicitud.Fecha > DateOnly.FromDateTime(DateTime.UtcNow))
-            errores.Add("La fecha del servicio no puede estar en el futuro.");
-
-        return errores;
-    }
 }
