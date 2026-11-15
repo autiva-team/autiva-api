@@ -113,6 +113,59 @@ public class CargasController : ControllerBase
     }
 
     /// <summary>
+    /// Corrige una carga por id y recalcula su rendimiento y el de las cargas
+    /// siguientes que dependen de ella.
+    /// </summary>
+    [HttpPut("/api/cargas/{id:guid}")]
+    [ProducesResponseType(typeof(CargaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Editar(
+        Guid id,
+        [FromBody] EditarCargaRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _cargaService.EditarAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            if (resultado.NoEncontrado)
+                return NotFound(new { mensaje = resultado.Mensaje });
+
+            return BadRequest(new { mensaje = "Datos de la carga inválidos.", errores = resultado.Errores });
+        }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Elimina (borrado lógico) una carga por id y recalcula el rendimiento de
+    /// las cargas siguientes que dependían de ella.
+    /// </summary>
+    [HttpDelete("/api/cargas/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _cargaService.EliminarAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Rendimiento (km/L) y gasto de combustible del vehículo: promedio general,
     /// variación contra el mes anterior, gasto del mes actual y autonomía estimada.
     /// </summary>
