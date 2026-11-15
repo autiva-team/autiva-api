@@ -32,5 +32,5 @@ public partial class Usuario
 
     public virtual ICollection<TokenRecuperacion> TokenRecuperacion { get; set; } = new List<TokenRecuperacion>();
 
-    public virtual Vehiculo? Vehiculo { get; set; }
+    public virtual ICollection<Vehiculo> Vehiculo { get; set; } = new List<Vehiculo>();
 }

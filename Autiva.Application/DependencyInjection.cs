@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IRecuperacionContrasenaService, RecuperacionContrasenaService>();
         services.AddScoped<IEstadisticasService, EstadisticasService>();
         services.AddScoped<IPreferenciasService, PreferenciasService>();
+        services.AddScoped<IPerfilService, PerfilService>();
 
         return services;
     }
