@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<IRendimientoService, RendimientoService>();
         services.AddScoped<IServicioService, ServicioService>();
         services.AddScoped<IRecordatorioService, RecordatorioService>();
+        services.AddScoped<IGastoService, GastoService>();
         services.AddScoped<ISincronizacionService, SincronizacionService>();
         services.AddScoped<IPushService, PushService>();
 

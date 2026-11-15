@@ -10,9 +10,6 @@ namespace Autiva.Application.Services;
 /// </summary>
 public class RendimientoService : IRendimientoService
 {
-    private static readonly TimeZoneInfo ZonaHorariaMexico =
-        TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
-
     private readonly ICargaRepository _cargaRepository;
     private readonly IVehiculoRepository _vehiculoRepository;
     private readonly ICurrentUserService _currentUserService;
@@ -46,7 +43,7 @@ public class RendimientoService : IRendimientoService
 
         // Los meses se calculan en hora de México, no en UTC: una carga hecha a las
         // 23:30 UTC del día 1 ya es "mes actual" en hora de México si cae el día 2.
-        var ahoraMexico = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ZonaHorariaMexico);
+        var ahoraMexico = ZonaMexico.Ahora();
         var mesActual = (ahoraMexico.Year, ahoraMexico.Month);
         var primerDiaMesAnterior = new DateTime(ahoraMexico.Year, ahoraMexico.Month, 1).AddMonths(-1);
         var mesAnterior = (primerDiaMesAnterior.Year, primerDiaMesAnterior.Month);
@@ -92,5 +89,5 @@ public class RendimientoService : IRendimientoService
     }
 
     private static DateTime ConvertirAMexico(DateTime fechaHoraUtc) =>
-        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(fechaHoraUtc, DateTimeKind.Utc), ZonaHorariaMexico);
+        ZonaMexico.ConvertirDesdeUtc(fechaHoraUtc);
 }
