@@ -31,4 +31,18 @@ public interface IServicioService
     Task<ResultadoAvanceServicio> ObtenerAvanceAsync(
         Guid vehiculoId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Edita un servicio de un vehículo del usuario del token.</summary>
+    Task<ResultadoServicio> EditarAsync(
+        Guid servicioId,
+        EditarServicioRequest solicitud,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Elimina (borrado lógico) un servicio de un vehículo del usuario del token, junto
+    /// con sus recordatorios pendientes ligados.
+    /// </summary>
+    Task<ResultadoEliminarServicio> EliminarAsync(
+        Guid servicioId,
+        CancellationToken cancellationToken = default);
 }

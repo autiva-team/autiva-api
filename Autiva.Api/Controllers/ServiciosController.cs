@@ -11,7 +11,7 @@ namespace Autiva.Api.Controllers;
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}/servicios")]
 [Authorize]
-public class ServiciosController : ControllerBase
+public class ServiciosController : AutivaControllerBase
 {
     private readonly IServicioService _servicioService;
 
@@ -38,18 +38,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.RegistrarAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Conflicto)
-                return Conflict(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del servicio inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del servicio inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/servicios/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -71,12 +60,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerHistorialAsync(vehiculoId, pagina, tamano, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -94,12 +78,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerDetalleAsync(id, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -118,13 +97,48 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerAvanceAsync(vehiculoId, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Edita un servicio por id. Actualiza el odómetro del vehículo si el nuevo
+    /// kilometraje es mayor al actual.
+    /// </summary>
+    [HttpPut("/api/servicios/{id:guid}")]
+    [ProducesResponseType(typeof(ServicioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Editar(
+        Guid id,
+        [FromBody] EditarServicioRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _servicioService.EditarAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado, "Datos del servicio inválidos.");
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Elimina (borrado lógico) un servicio por id, junto con sus recordatorios
+    /// pendientes ligados.
+    /// </summary>
+    [HttpDelete("/api/servicios/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _servicioService.EliminarAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado);
+
+        return NoContent();
     }
 }

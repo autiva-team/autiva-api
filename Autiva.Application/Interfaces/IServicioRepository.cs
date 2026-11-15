@@ -38,4 +38,17 @@ public interface IServicioRepository
     /// fecha; null si no tiene ninguno.
     /// </summary>
     Task<ServicioMantenimiento?> ObtenerUltimoConMetaAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Guarda los cambios del servicio (ya mutado por el servicio de Application) y, si el
+    /// nuevo kilometraje es mayor al actual del vehículo, lo actualiza. Todo en una
+    /// sola transacción.
+    /// </summary>
+    Task<ServicioMantenimiento> EditarAsync(ServicioMantenimiento servicio, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra lógicamente el servicio y sus recordatorios pendientes ligados
+    /// (<c>recordatorio.servicio_id</c>), en una sola transacción.
+    /// </summary>
+    Task EliminarAsync(Guid id, CancellationToken cancellationToken = default);
 }

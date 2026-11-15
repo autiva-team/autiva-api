@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de obtener el rendimiento de un vehículo del usuario autenticado.
 /// </summary>
-public class ResultadoRendimiento
+public class ResultadoRendimiento : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

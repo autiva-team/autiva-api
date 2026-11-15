@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de consultar el historial paginado de gastos de un vehículo.
 /// </summary>
-public class ResultadoHistorialGastos
+public class ResultadoHistorialGastos : IResultadoOperacion
 {
     public bool Exito { get; init; }
 
