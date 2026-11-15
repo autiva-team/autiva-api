@@ -233,6 +233,42 @@ public class VehiculoService : IVehiculoService
         return ResultadoEditarVehiculo.CrearExito(MapearDetalle(actualizado));
     }
 
+    public async Task<ResultadoEliminarVehiculo> EliminarAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoEliminarVehiculo.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoEliminarVehiculo.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var nuevoPrincipalId = await DecidirNuevoPrincipalAsync(usuarioId.Value, vehiculo, cancellationToken);
+
+        await _vehiculoRepository.EliminarAsync(usuarioId.Value, vehiculoId, nuevoPrincipalId, cancellationToken);
+
+        return ResultadoEliminarVehiculo.CrearExito();
+    }
+
+    /// <summary>
+    /// Si el vehículo borrado era el principal, el restante más reciente del usuario
+    /// toma su lugar; null si no era principal o si no le queda ninguno.
+    /// </summary>
+    private async Task<Guid?> DecidirNuevoPrincipalAsync(Guid usuarioId, Vehiculo vehiculo, CancellationToken cancellationToken)
+    {
+        if (!vehiculo.EsPrincipal)
+            return null;
+
+        var siguiente = await _vehiculoRepository.ObtenerMasRecienteDistintoAsync(usuarioId, vehiculo.Id, cancellationToken);
+
+        return siguiente?.Id;
+    }
+
     private static bool EsEstatusValido(string? estatus) =>
         estatus is "activo" or "en_taller";
 

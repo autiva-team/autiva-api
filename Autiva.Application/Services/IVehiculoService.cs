@@ -38,4 +38,12 @@ public interface IVehiculoService
         Guid vehiculoId,
         EditarVehiculoRequest solicitud,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Elimina (borrado lógico) un vehículo del usuario del token y todo lo suyo. Si era
+    /// el principal, pasa el puesto al vehículo restante más reciente (si queda alguno).
+    /// </summary>
+    Task<ResultadoEliminarVehiculo> EliminarAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default);
 }
