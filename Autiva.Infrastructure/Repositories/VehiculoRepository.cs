@@ -122,4 +122,34 @@ public class VehiculoRepository : IVehiculoRepository
 
         return vehiculo;
     }
+
+    public Task<bool> ExistePlacasEnOtroVehiculoAsync(Guid usuarioId, string placas, Guid vehiculoIdExcluido, CancellationToken cancellationToken = default) =>
+        _context.Vehiculo.AnyAsync(
+            v => v.UsuarioId == usuarioId &&
+                 v.EliminadoEn == null &&
+                 v.Placas == placas &&
+                 v.Id != vehiculoIdExcluido,
+            cancellationToken);
+
+    public async Task<Vehiculo> EditarAsync(
+        Guid usuarioId, Guid vehiculoId, string marca, string modelo, short anio, string placas,
+        string? color, string? fotoUrl, string estatus, CancellationToken cancellationToken = default)
+    {
+        var vehiculo = await _context.Vehiculo.FirstAsync(
+            v => v.Id == vehiculoId && v.UsuarioId == usuarioId,
+            cancellationToken);
+
+        vehiculo.Marca = marca;
+        vehiculo.Modelo = modelo;
+        vehiculo.Anio = anio;
+        vehiculo.Placas = placas;
+        vehiculo.Color = color;
+        vehiculo.FotoUrl = fotoUrl;
+        vehiculo.Estatus = estatus;
+        vehiculo.ActualizadoEn = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return vehiculo;
+    }
 }

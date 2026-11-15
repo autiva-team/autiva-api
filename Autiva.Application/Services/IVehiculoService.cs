@@ -29,4 +29,13 @@ public interface IVehiculoService
         Guid vehiculoId,
         ActualizarOdometroRequest solicitud,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Edita marca, modelo, año, placas, color, foto y estatus de un vehículo del usuario
+    /// del token. No toca odómetro, kilometraje inicial ni "es principal".
+    /// </summary>
+    Task<ResultadoEditarVehiculo> EditarAsync(
+        Guid vehiculoId,
+        EditarVehiculoRequest solicitud,
+        CancellationToken cancellationToken = default);
 }

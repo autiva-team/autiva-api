@@ -38,7 +38,10 @@ public class VehiculoService : IVehiculoService
         var color = string.IsNullOrWhiteSpace(solicitud.Color) ? null : solicitud.Color.Trim();
         var fotoUrl = string.IsNullOrWhiteSpace(solicitud.FotoUrl) ? null : solicitud.FotoUrl.Trim();
 
-        var errores = Validar(marca, modelo, solicitud.Anio, placas, solicitud.KilometrajeInicial, color, fotoUrl);
+        var errores = ValidadorVehiculo.Validar(marca, modelo, solicitud.Anio, placas, color, fotoUrl);
+
+        if (solicitud.KilometrajeInicial < 0)
+            errores.Add("El kilometraje inicial no puede ser negativo.");
 
         if (errores.Count > 0)
             return ResultadoVehiculo.CrearValidacion(errores);
@@ -184,6 +187,55 @@ public class VehiculoService : IVehiculoService
         return ResultadoVehiculoDetalle.CrearExito(MapearDetalle(actualizado));
     }
 
+    public async Task<ResultadoEditarVehiculo> EditarAsync(
+        Guid vehiculoId,
+        EditarVehiculoRequest solicitud,
+        CancellationToken cancellationToken = default)
+    {
+        solicitud ??= new EditarVehiculoRequest();
+
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoEditarVehiculo.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoEditarVehiculo.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var marca = solicitud.Marca?.Trim() ?? string.Empty;
+        var modelo = solicitud.Modelo?.Trim() ?? string.Empty;
+        var placas = solicitud.Placas?.Trim().ToUpperInvariant() ?? string.Empty;
+        var color = string.IsNullOrWhiteSpace(solicitud.Color) ? null : solicitud.Color.Trim();
+        var fotoUrl = string.IsNullOrWhiteSpace(solicitud.FotoUrl) ? null : solicitud.FotoUrl.Trim();
+
+        var errores = ValidadorVehiculo.Validar(marca, modelo, solicitud.Anio, placas, color, fotoUrl);
+
+        if (!EsEstatusValido(solicitud.Estatus))
+            errores.Add("El estatus debe ser \"activo\" o \"en_taller\".");
+
+        if (errores.Count > 0)
+            return ResultadoEditarVehiculo.CrearValidacion(errores);
+
+        // Las placas del propio vehículo no cuentan como repetidas.
+        var placasRepetidas = await _vehiculoRepository.ExistePlacasEnOtroVehiculoAsync(
+            usuarioId.Value, placas, vehiculoId, cancellationToken);
+
+        if (placasRepetidas)
+            return ResultadoEditarVehiculo.CrearConflicto("Ya tienes un vehículo con esas placas.");
+
+        var actualizado = await _vehiculoRepository.EditarAsync(
+            usuarioId.Value, vehiculoId, marca, modelo, solicitud.Anio, placas, color, fotoUrl, solicitud.Estatus!,
+            cancellationToken);
+
+        return ResultadoEditarVehiculo.CrearExito(MapearDetalle(actualizado));
+    }
+
+    private static bool EsEstatusValido(string? estatus) =>
+        estatus is "activo" or "en_taller";
+
     private static VehiculoResumenDto MapearResumen(Vehiculo vehiculo) => new()
     {
         Id = vehiculo.Id,
@@ -210,47 +262,4 @@ public class VehiculoService : IVehiculoService
         FotoUrl = vehiculo.FotoUrl,
         CreadoEn = vehiculo.CreadoEn
     };
-
-    private static List<string> Validar(
-        string marca,
-        string modelo,
-        short anio,
-        string placas,
-        int kilometrajeInicial,
-        string? color,
-        string? fotoUrl)
-    {
-        var errores = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(marca))
-            errores.Add("La marca es obligatoria.");
-        else if (marca.Length > 50)
-            errores.Add("La marca no puede superar los 50 caracteres.");
-
-        if (string.IsNullOrWhiteSpace(modelo))
-            errores.Add("El modelo es obligatorio.");
-        else if (modelo.Length > 50)
-            errores.Add("El modelo no puede superar los 50 caracteres.");
-
-        var anioMaximo = DateTime.UtcNow.Year + 1;
-
-        if (anio < 1900 || anio > anioMaximo)
-            errores.Add($"El año debe estar entre 1900 y {anioMaximo}.");
-
-        if (string.IsNullOrWhiteSpace(placas))
-            errores.Add("Las placas son obligatorias.");
-        else if (placas.Length > 15)
-            errores.Add("Las placas no pueden superar los 15 caracteres.");
-
-        if (kilometrajeInicial < 0)
-            errores.Add("El kilometraje inicial no puede ser negativo.");
-
-        if (color is { Length: > 30 })
-            errores.Add("El color no puede superar los 30 caracteres.");
-
-        if (fotoUrl is { Length: > 500 })
-            errores.Add("La URL de la foto no puede superar los 500 caracteres.");
-
-        return errores;
-    }
 }
