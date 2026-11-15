@@ -22,11 +22,15 @@ public partial class Usuario
 
     public DateTime ActualizadoEn { get; set; }
 
+    public DateTime? ContrasenaActualizadaEn { get; set; }
+
     public virtual ICollection<Notificacion> Notificacion { get; set; } = new List<Notificacion>();
 
     public virtual PreferenciasUsuario? PreferenciasUsuario { get; set; }
 
     public virtual ICollection<SuscripcionPush> SuscripcionPush { get; set; } = new List<SuscripcionPush>();
+
+    public virtual ICollection<TokenRecuperacion> TokenRecuperacion { get; set; } = new List<TokenRecuperacion>();
 
     public virtual Vehiculo? Vehiculo { get; set; }
 }

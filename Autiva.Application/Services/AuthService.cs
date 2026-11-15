@@ -121,12 +121,7 @@ public class AuthService : IAuthService
         else if (!MailAddress.TryCreate(correo, out _))
             errores.Add("El correo no tiene un formato válido.");
 
-        if (string.IsNullOrWhiteSpace(contrasena))
-            errores.Add("La contraseña es obligatoria.");
-        else if (contrasena.Length < 8)
-            errores.Add("La contraseña debe tener al menos 8 caracteres.");
-        else if (contrasena.Length > 72)
-            errores.Add("La contraseña no puede superar los 72 caracteres (límite de BCrypt).");
+        errores.AddRange(ValidadorContrasena.Validar(contrasena));
 
         return errores;
     }

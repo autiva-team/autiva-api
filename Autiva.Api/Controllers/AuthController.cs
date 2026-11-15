@@ -10,13 +10,15 @@ namespace Autiva.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController : AutivaControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IRecuperacionContrasenaService _recuperacionContrasenaService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IRecuperacionContrasenaService recuperacionContrasenaService)
     {
         _authService = authService;
+        _recuperacionContrasenaService = recuperacionContrasenaService;
     }
 
     /// <summary>
@@ -75,5 +77,42 @@ public class AuthController : ControllerBase
     public IActionResult Logout()
     {
         return NoContent();
+    }
+
+    /// <summary>
+    /// Envía un enlace para restablecer la contraseña si el correo está registrado.
+    /// Responde igual exista o no la cuenta, para no revelar qué correos están registrados.
+    /// </summary>
+    [HttpPost("recuperar-contrasena")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RecuperarContrasena(
+        [FromBody] RecuperarContrasenaRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _recuperacionContrasenaService.RecuperarAsync(solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado);
+
+        return Ok(new { mensaje = resultado.Mensaje });
+    }
+
+    /// <summary>
+    /// Restablece la contraseña a partir del token recibido por correo.
+    /// </summary>
+    [HttpPost("restablecer-contrasena")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RestablecerContrasena(
+        [FromBody] RestablecerContrasenaRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _recuperacionContrasenaService.RestablecerAsync(solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado);
+
+        return Ok(new { mensaje = resultado.Mensaje });
     }
 }
