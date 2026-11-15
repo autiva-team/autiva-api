@@ -38,6 +38,8 @@ public partial class AutivaDbContext : DbContext
 
     public virtual DbSet<TipoServicio> TipoServicio { get; set; }
 
+    public virtual DbSet<TokenRecuperacion> TokenRecuperacion { get; set; }
+
     public virtual DbSet<Usuario> Usuario { get; set; }
 
     public virtual DbSet<Vehiculo> Vehiculo { get; set; }
@@ -514,6 +516,34 @@ public partial class AutivaDbContext : DbContext
                 .HasColumnName("nombre");
         });
 
+        modelBuilder.Entity<TokenRecuperacion>(entity =>
+        {
+            entity.ToTable("token_recuperacion", tb => tb.HasComment("Tokens de un solo uso para restablecer contraseña (HU-027)."));
+
+            entity.HasIndex(e => e.TokenHash, "UX_token_recuperacion_hash").IsUnique();
+
+            entity.HasIndex(e => e.UsuarioId, "IX_token_recuperacion_usuario");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newid())")
+                .HasColumnName("id");
+            entity.Property(e => e.CreadoEn)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("creado_en");
+            entity.Property(e => e.ExpiraEn).HasColumnName("expira_en");
+            entity.Property(e => e.TokenHash)
+                .HasMaxLength(64)
+                .IsFixedLength()
+                .HasColumnName("token_hash");
+            entity.Property(e => e.UsadoEn).HasColumnName("usado_en");
+            entity.Property(e => e.UsuarioId).HasColumnName("usuario_id");
+
+            entity.HasOne(d => d.Usuario).WithMany(p => p.TokenRecuperacion)
+                .HasForeignKey(d => d.UsuarioId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_token_recuperacion_usuario");
+        });
+
         modelBuilder.Entity<Usuario>(entity =>
         {
             entity.ToTable("usuario", tb =>
@@ -530,6 +560,7 @@ public partial class AutivaDbContext : DbContext
             entity.Property(e => e.ActualizadoEn)
                 .HasDefaultValueSql("(sysutcdatetime())")
                 .HasColumnName("actualizado_en");
+            entity.Property(e => e.ContrasenaActualizadaEn).HasColumnName("contrasena_actualizada_en");
             entity.Property(e => e.ContrasenaHash)
                 .HasMaxLength(255)
                 .HasColumnName("contrasena_hash");
