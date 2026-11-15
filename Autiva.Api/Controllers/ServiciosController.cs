@@ -127,4 +127,57 @@ public class ServiciosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Edita un servicio por id. Actualiza el odómetro del vehículo si el nuevo
+    /// kilometraje es mayor al actual.
+    /// </summary>
+    [HttpPut("/api/servicios/{id:guid}")]
+    [ProducesResponseType(typeof(ServicioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Editar(
+        Guid id,
+        [FromBody] EditarServicioRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _servicioService.EditarAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            if (resultado.NoEncontrado)
+                return NotFound(new { mensaje = resultado.Mensaje });
+
+            return BadRequest(new { mensaje = "Datos del servicio inválidos.", errores = resultado.Errores });
+        }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Elimina (borrado lógico) un servicio por id, junto con sus recordatorios
+    /// pendientes ligados.
+    /// </summary>
+    [HttpDelete("/api/servicios/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _servicioService.EliminarAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return NoContent();
+    }
 }
