@@ -1,3 +1,4 @@
+using Autiva.Application.Dtos;
 using Autiva.Application.Interfaces;
 using Autiva.Application.Services;
 using Autiva.Domain.Entities;
@@ -40,7 +41,7 @@ public class GastoServiceTests
         OrigenId = Guid.NewGuid()
     };
 
-    private static Vehiculo Vehiculo() => new() { Id = VehiculoId, UsuarioId = UsuarioId };
+    private static Vehiculo Vehiculo(int odometroActual = 0) => new() { Id = VehiculoId, UsuarioId = UsuarioId, OdometroActual = odometroActual };
 
     private void ConfigurarGastosDelRepositorio(params VwGastosConsolidados[] gastos)
     {
@@ -48,6 +49,28 @@ public class GastoServiceTests
             .Setup(r => r.ListarPorVehiculoYRangoAsync(VehiculoId, It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(gastos);
     }
+
+    private static CategoriaGasto Categoria(byte id = 1, string nombre = "Lavado") => new() { Id = id, Nombre = nombre };
+
+    private static RegistrarGastoRequest SolicitudValida() => new()
+    {
+        CategoriaId = 1,
+        Concepto = "Lavado exterior",
+        Monto = 150m,
+        Fecha = null,
+        Odometro = null
+    };
+
+    private static Gasto GastoRegistrado(DateOnly fecha, string categoriaNombre, decimal monto) => new()
+    {
+        Id = Guid.NewGuid(),
+        VehiculoId = VehiculoId,
+        CategoriaId = 1,
+        Concepto = categoriaNombre,
+        Monto = monto,
+        Fecha = fecha,
+        Categoria = new CategoriaGasto { Id = 1, Nombre = categoriaNombre }
+    };
 
     // ---------- Casos de validación ----------
 
@@ -248,5 +271,397 @@ public class GastoServiceTests
         Assert.Null(datos.VariacionPorcentaje);
         Assert.Equal(0m, datos.CostoPromedioDiario);
         Assert.Empty(datos.Desglose);
+    }
+
+    // ---------- RegistrarAsync ----------
+
+    [Fact]
+    public async Task RegistrarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, SolicitudValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_VehiculoNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, SolicitudValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_CategoriaNoExiste_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CategoriaGasto?)null);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.CategoriaId = 99;
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("La categoría no existe.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ConceptoVacio_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Concepto = "   ";
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El concepto es obligatorio.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ConceptoMuyLargo_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Concepto = new string('a', 121);
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El concepto no puede superar los 120 caracteres.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_MontoCero_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Monto = 0m;
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El monto debe ser mayor a cero.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_FechaFutura_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Fecha = DateOnly.FromDateTime(HoyMexico()).AddDays(1);
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("La fecha del gasto no puede estar en el futuro.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_OdometroNegativo_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Odometro = -1;
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El odómetro no puede ser negativo.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_IdRepetido_RegresaConflicto()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        _gastoRepository
+            .Setup(r => r.ExisteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, SolicitudValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.Conflicto);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_DatosValidos_RegistraYRegresaExito()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(odometroActual: 1000));
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        _gastoRepository
+            .Setup(r => r.ExisteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _gastoRepository
+            .Setup(r => r.RegistrarAsync(It.IsAny<Gasto>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Gasto g, CancellationToken _) => g);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, SolicitudValida());
+
+        // Assert
+        Assert.True(resultado.Exito);
+        Assert.Equal("Lavado exterior", resultado.Datos!.Concepto);
+        Assert.Equal("Lavado", resultado.Datos.Categoria);
+        Assert.Equal(150m, resultado.Datos.Monto);
+        Assert.Equal(DateOnly.FromDateTime(HoyMexico()), resultado.Datos.Fecha);
+        _vehiculoRepository.Verify(
+            r => r.ActualizarOdometroAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_OdometroMayorAlActual_ActualizaOdometro()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(odometroActual: 1000));
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        _gastoRepository
+            .Setup(r => r.RegistrarAsync(It.IsAny<Gasto>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Gasto g, CancellationToken _) => g);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Odometro = 1200;
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _vehiculoRepository.Verify(
+            r => r.ActualizarOdometroAsync(UsuarioId, VehiculoId, 1200, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_OdometroMenorAlActual_NoActualizaOdometro()
+    {
+        // Arrange: puede ser un gasto viejo, se acepta sin tocar el odómetro.
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(odometroActual: 1000));
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        _gastoRepository
+            .Setup(r => r.RegistrarAsync(It.IsAny<Gasto>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Gasto g, CancellationToken _) => g);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudValida();
+        solicitud.Odometro = 500;
+
+        // Act
+        var resultado = await servicio.RegistrarAsync(VehiculoId, solicitud);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _vehiculoRepository.Verify(
+            r => r.ActualizarOdometroAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // ---------- ListarAsync ----------
+
+    [Fact]
+    public async Task ListarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ListarAsync(VehiculoId, null, null, null, 1, 10);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task ListarAsync_VehiculoNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ListarAsync(VehiculoId, null, null, null, 1, 10);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task ListarAsync_SoloAnioSinMes_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ListarAsync(VehiculoId, 2026, null, null, 1, 10);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.Validacion);
+    }
+
+    [Fact]
+    public async Task ListarAsync_CategoriaNoExiste_RegresaValidacion()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CategoriaGasto?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ListarAsync(VehiculoId, null, null, categoriaId: 99, pagina: 1, tamano: 10);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.Validacion);
+    }
+
+    [Fact]
+    public async Task ListarAsync_ConFiltros_RegresaListaPaginada()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _gastoRepository
+            .Setup(r => r.ObtenerCategoriaAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Categoria());
+        var hoy = PrimerDiaDelMes(0);
+        var gastos = new List<Gasto>
+        {
+            GastoRegistrado(hoy, "Lavado", 150m)
+        };
+        _gastoRepository
+            .Setup(r => r.ListarHistorialAsync(VehiculoId, 1, 10, hoy.Year, hoy.Month, (byte)1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((gastos, 1));
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ListarAsync(VehiculoId, hoy.Year, hoy.Month, categoriaId: 1, pagina: 1, tamano: 10);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        Assert.Single(resultado.Datos!.Items);
+        Assert.Equal("Lavado", resultado.Datos.Items[0].Categoria);
+        Assert.Equal(1, resultado.Datos.TotalRegistros);
+        Assert.Equal(1, resultado.Datos.TotalPaginas);
     }
 }
