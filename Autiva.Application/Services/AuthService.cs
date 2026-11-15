@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using Autiva.Application.Dtos;
 using Autiva.Application.Interfaces;
 using Autiva.Domain.Entities;
@@ -107,20 +106,7 @@ public class AuthService : IAuthService
 
     private static List<string> ValidarRegistro(string nombre, string correo, string contrasena)
     {
-        var errores = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(nombre))
-            errores.Add("El nombre es obligatorio.");
-        else if (nombre.Length > 120)
-            errores.Add("El nombre no puede superar los 120 caracteres.");
-
-        if (string.IsNullOrWhiteSpace(correo))
-            errores.Add("El correo es obligatorio.");
-        else if (correo.Length > 150)
-            errores.Add("El correo no puede superar los 150 caracteres.");
-        else if (!MailAddress.TryCreate(correo, out _))
-            errores.Add("El correo no tiene un formato válido.");
-
+        var errores = ValidadorPerfil.Validar(nombre, correo);
         errores.AddRange(ValidadorContrasena.Validar(contrasena));
 
         return errores;

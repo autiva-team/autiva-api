@@ -641,8 +641,8 @@ public partial class AutivaDbContext : DbContext
                 .HasMaxLength(17)
                 .HasColumnName("vin");
 
-            entity.HasOne(d => d.Usuario).WithOne(p => p.Vehiculo)
-                .HasForeignKey<Vehiculo>(d => d.UsuarioId)
+            entity.HasOne(d => d.Usuario).WithMany(p => p.Vehiculo)
+                .HasForeignKey(d => d.UsuarioId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_vehiculo_usuario");
         });
