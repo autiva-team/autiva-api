@@ -16,6 +16,10 @@ public static class DependencyInjection
         services.AddScoped<IGastoService, GastoService>();
         services.AddScoped<ISincronizacionService, SincronizacionService>();
         services.AddScoped<IPushService, PushService>();
+        services.AddScoped<IRecuperacionContrasenaService, RecuperacionContrasenaService>();
+        services.AddScoped<IEstadisticasService, EstadisticasService>();
+        services.AddScoped<IPreferenciasService, PreferenciasService>();
+        services.AddScoped<IPerfilService, PerfilService>();
 
         return services;
     }
