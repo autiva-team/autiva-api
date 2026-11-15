@@ -138,6 +138,127 @@ public class ServicioService : IServicioService
         return ResultadoServicio.CrearExito(MapearRespuesta(servicio, servicio.TipoServicio.Nombre));
     }
 
+    public async Task<ResultadoAvanceServicio> ObtenerAvanceAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoAvanceServicio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoAvanceServicio.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var servicio = await _servicioRepository.ObtenerUltimoConMetaAsync(vehiculoId, cancellationToken);
+
+        // Sin servicio con meta no es error: el frontend invita a registrar uno.
+        if (servicio is null)
+            return ResultadoAvanceServicio.CrearExito(new AvanceServicioResponse { OdometroActual = vehiculo.OdometroActual });
+
+        return ResultadoAvanceServicio.CrearExito(CalcularAvance(servicio, vehiculo.OdometroActual));
+    }
+
+    private static AvanceServicioResponse CalcularAvance(ServicioMantenimiento servicio, int odometroActual)
+    {
+        var hoy = ZonaMexico.Ahora();
+        var metaKm = servicio.MetaProximoKm!.Value;
+        var kmRestantes = CalculadoraAvanceServicio.KmRestantes(metaKm, odometroActual);
+        var kmPorDia = CalculadoraAvanceServicio.KmPorDia(servicio.KilometrajeServicio, odometroActual, servicio.Fecha, hoy);
+        var diasEstimados = CalculadoraAvanceServicio.DiasEstimados(kmRestantes, kmPorDia);
+
+        return new AvanceServicioResponse
+        {
+            UltimoServicio = new UltimoServicioConMetaDto
+            {
+                Id = servicio.Id,
+                Tipo = servicio.TipoServicio.Nombre,
+                Fecha = servicio.Fecha,
+                KilometrajeServicio = servicio.KilometrajeServicio
+            },
+            MetaKm = metaKm,
+            OdometroActual = odometroActual,
+            KmRestantes = kmRestantes,
+            PorcentajeAvance = CalculadoraAvanceServicio.PorcentajeAvance(servicio.KilometrajeServicio, metaKm, odometroActual),
+            Vencido = CalculadoraAvanceServicio.Vencido(kmRestantes),
+            KmPorDia = kmPorDia,
+            DiasEstimados = diasEstimados,
+            FechaEstimada = CalculadoraAvanceServicio.FechaEstimada(hoy, diasEstimados),
+            FechaRetorno = servicio.FechaRetorno
+        };
+    }
+
+    public async Task<ResultadoServicio> EditarAsync(
+        Guid servicioId,
+        EditarServicioRequest solicitud,
+        CancellationToken cancellationToken = default)
+    {
+        solicitud ??= new EditarServicioRequest();
+
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoServicio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var servicio = await _servicioRepository.ObtenerPorUsuarioAsync(usuarioId.Value, servicioId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminado o es de otro usuario: no se revela cuál es el caso.
+        if (servicio is null)
+            return ResultadoServicio.CrearNoEncontrado("No se encontró el servicio.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, servicio.VehiculoId, cancellationToken);
+        var taller = string.IsNullOrWhiteSpace(solicitud.Taller) ? null : solicitud.Taller.Trim();
+        var folio = string.IsNullOrWhiteSpace(solicitud.Folio) ? null : solicitud.Folio.Trim();
+        var notas = string.IsNullOrWhiteSpace(solicitud.Notas) ? null : solicitud.Notas.Trim();
+
+        var errores = ValidadorServicio.Validar(
+            solicitud.Costo, solicitud.KilometrajeServicio, vehiculo!.KilometrajeInicial,
+            solicitud.MetaProximoKm, solicitud.Fecha, solicitud.FechaRetorno);
+
+        var tipoServicio = await _servicioRepository.ObtenerTipoServicioAsync(solicitud.TipoServicioId, cancellationToken);
+
+        if (tipoServicio is null)
+            errores.Add("El tipo de servicio no existe.");
+
+        if (errores.Count > 0)
+            return ResultadoServicio.CrearValidacion(errores);
+
+        servicio.TipoServicioId = solicitud.TipoServicioId;
+        servicio.Fecha = solicitud.Fecha;
+        servicio.KilometrajeServicio = solicitud.KilometrajeServicio;
+        servicio.Costo = solicitud.Costo;
+        servicio.MetaProximoKm = solicitud.MetaProximoKm;
+        servicio.FechaRetorno = solicitud.FechaRetorno;
+        servicio.Taller = taller;
+        servicio.Folio = folio;
+        servicio.Notas = notas;
+
+        var editado = await _servicioRepository.EditarAsync(servicio, cancellationToken);
+
+        return ResultadoServicio.CrearExito(MapearRespuesta(editado, tipoServicio!.Nombre));
+    }
+
+    public async Task<ResultadoEliminarServicio> EliminarAsync(Guid servicioId, CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoEliminarServicio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var servicio = await _servicioRepository.ObtenerPorUsuarioAsync(usuarioId.Value, servicioId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminado o es de otro usuario: no se revela cuál es el caso.
+        if (servicio is null)
+            return ResultadoEliminarServicio.CrearNoEncontrado("No se encontró el servicio.");
+
+        await _servicioRepository.EliminarAsync(servicioId, cancellationToken);
+
+        return ResultadoEliminarServicio.CrearExito();
+    }
+
     private static (int Pagina, int Tamano) NormalizarPaginacion(int pagina, int tamano) =>
         (Math.Max(pagina, 1), Math.Clamp(tamano, 1, 50));
 

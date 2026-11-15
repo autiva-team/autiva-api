@@ -1,4 +1,5 @@
 using Autiva.Application.Services;
+using Autiva.Domain.Entities;
 
 namespace Autiva.Tests;
 
@@ -143,5 +144,70 @@ public class CalculadoraRendimientoTests
 
         // Assert
         Assert.Null(resultado);
+    }
+
+    // ---------- RecalcularRendimientos (HU-023) ----------
+
+    private static CargaCombustible Carga(DateTime fechaHora, int odometro, decimal litros, bool tanqueLleno) => new()
+    {
+        Id = Guid.NewGuid(),
+        FechaHora = fechaHora,
+        Odometro = odometro,
+        Litros = litros,
+        TanqueLleno = tanqueLleno
+    };
+
+    [Fact]
+    public void RecalcularRendimientos_CadenaTanqueLlenoParcialTanqueLleno_SoloCalculaElSegundoTanqueLleno()
+    {
+        // Arrange: tanque lleno (600 km), parcial de 15 L, tanque lleno (1000 km, 25 L).
+        // Rendimiento del segundo tanque lleno: 400 km / (15 + 25) L = 10.
+        var tanqueLleno1 = Carga(new DateTime(2026, 11, 1), 600, litros: 40m, tanqueLleno: true);
+        var parcial = Carga(new DateTime(2026, 11, 5), 800, litros: 15m, tanqueLleno: false);
+        var tanqueLleno2 = Carga(new DateTime(2026, 11, 10), 1000, litros: 25m, tanqueLleno: true);
+        var cargas = new List<CargaCombustible> { tanqueLleno1, parcial, tanqueLleno2 };
+
+        // Act
+        CalculadoraRendimiento.RecalcularRendimientos(cargas);
+
+        // Assert
+        Assert.Null(tanqueLleno1.RendimientoKml);
+        Assert.Null(parcial.RendimientoKml);
+        Assert.Equal(10m, tanqueLleno2.RendimientoKml);
+    }
+
+    [Fact]
+    public void RecalcularRendimientos_DespuesDeEditarLitrosDeLaIntermedia_CambiaElRendimientoDeLaSiguiente()
+    {
+        // Arrange: misma cadena, pero la parcial se edita de 15 L a 35 L.
+        // Nuevo rendimiento del segundo tanque lleno: 400 km / (35 + 25) L = 6.67.
+        var tanqueLleno1 = Carga(new DateTime(2026, 11, 1), 600, litros: 40m, tanqueLleno: true);
+        var parcial = Carga(new DateTime(2026, 11, 5), 800, litros: 15m, tanqueLleno: false);
+        var tanqueLleno2 = Carga(new DateTime(2026, 11, 10), 1000, litros: 25m, tanqueLleno: true);
+        var cargas = new List<CargaCombustible> { tanqueLleno1, parcial, tanqueLleno2 };
+        CalculadoraRendimiento.RecalcularRendimientos(cargas);
+
+        // Act: edición de la carga intermedia.
+        parcial.Litros = 35m;
+        CalculadoraRendimiento.RecalcularRendimientos(cargas);
+
+        // Assert
+        Assert.Equal(6.67m, tanqueLleno2.RendimientoKml);
+    }
+
+    [Fact]
+    public void RecalcularRendimientos_DespuesDeBorrarLaIntermedia_RecalculaConLasRestantes()
+    {
+        // Arrange: misma cadena, pero se borra la parcial (ya no entra a la lista).
+        // Nuevo rendimiento del segundo tanque lleno: 400 km / 25 L = 16.
+        var tanqueLleno1 = Carga(new DateTime(2026, 11, 1), 600, litros: 40m, tanqueLleno: true);
+        var tanqueLleno2 = Carga(new DateTime(2026, 11, 10), 1000, litros: 25m, tanqueLleno: true);
+        var cargasSinParcial = new List<CargaCombustible> { tanqueLleno1, tanqueLleno2 };
+
+        // Act: recálculo tras el borrado lógico de la intermedia.
+        CalculadoraRendimiento.RecalcularRendimientos(cargasSinParcial);
+
+        // Assert
+        Assert.Equal(16m, tanqueLleno2.RendimientoKml);
     }
 }

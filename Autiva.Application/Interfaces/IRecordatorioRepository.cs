@@ -18,9 +18,11 @@ public interface IRecordatorioRepository
     Task<(int Total, DateOnly? UltimoServicio)> ObtenerResumenServiciosAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Obtiene el conteo de recordatorios pendientes y el próximo (por fecha límite).
+    /// Obtiene el conteo y la lista de recordatorios pendientes del vehículo (con su
+    /// vehículo incluido, para calcular el km por día). Quien llama decide cuál es el
+    /// próximo según la urgencia (<see cref="OrdenadorRecordatorios"/>).
     /// </summary>
-    Task<(int Total, Recordatorio? Proximo)> ObtenerResumenRecordatoriosAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
+    Task<(int Total, IReadOnlyList<Recordatorio> Pendientes)> ObtenerResumenRecordatoriosAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Registra un nuevo recordatorio y retorna la entidad guardada.
@@ -38,9 +40,11 @@ public interface IRecordatorioRepository
     Task<IReadOnlyList<Recordatorio>> ObtenerPorUsuarioAsync(Guid usuarioId, string? estado = "pendiente", CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Obtiene un recordatorio por su identificador único junto con su vehículo.
+    /// Recordatorio no eliminado por id, de un vehículo no eliminado del usuario; null si
+    /// no existe, está eliminado, su vehículo está eliminado o es de otro usuario (mismo
+    /// resultado, sin distinguir el motivo).
     /// </summary>
-    Task<Recordatorio?> ObtenerPorIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Recordatorio?> ObtenerDetalleAsync(Guid usuarioId, Guid recordatorioId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Actualiza un recordatorio existente en la base de datos.

@@ -11,7 +11,7 @@ namespace Autiva.Api.Controllers;
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}/cargas")]
 [Authorize]
-public class CargasController : ControllerBase
+public class CargasController : AutivaControllerBase
 {
     private readonly ICargaService _cargaService;
     private readonly IRendimientoService _rendimientoService;
@@ -40,18 +40,7 @@ public class CargasController : ControllerBase
         var resultado = await _cargaService.RegistrarAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Conflicto)
-                return Conflict(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos de la carga inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos de la carga inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/cargas/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -76,15 +65,7 @@ public class CargasController : ControllerBase
         var resultado = await _cargaService.ObtenerHistorialAsync(vehiculoId, pagina, tamano, desde, hasta, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Validacion)
-                return BadRequest(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -102,14 +83,49 @@ public class CargasController : ControllerBase
         var resultado = await _cargaService.ObtenerDetalleAsync(id, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Corrige una carga por id y recalcula su rendimiento y el de las cargas
+    /// siguientes que dependen de ella.
+    /// </summary>
+    [HttpPut("/api/cargas/{id:guid}")]
+    [ProducesResponseType(typeof(CargaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Editar(
+        Guid id,
+        [FromBody] EditarCargaRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _cargaService.EditarAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado, "Datos de la carga inválidos.");
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Elimina (borrado lógico) una carga por id y recalcula el rendimiento de
+    /// las cargas siguientes que dependían de ella.
+    /// </summary>
+    [HttpDelete("/api/cargas/{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _cargaService.EliminarAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+            return ErrorDesdeResultado(resultado);
+
+        return NoContent();
     }
 
     /// <summary>
@@ -125,12 +141,7 @@ public class CargasController : ControllerBase
         var resultado = await _rendimientoService.ObtenerAsync(vehiculoId, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }

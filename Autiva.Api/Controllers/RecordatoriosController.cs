@@ -11,7 +11,7 @@ namespace Autiva.Api.Controllers;
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}")]
 [Authorize]
-public class RecordatoriosController : ControllerBase
+public class RecordatoriosController : AutivaControllerBase
 {
     private readonly IRecordatorioService _recordatorioService;
 
@@ -33,12 +33,7 @@ public class RecordatoriosController : ControllerBase
         var resultado = await _recordatorioService.ObtenerResumenAsync(vehiculoId, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -60,12 +55,7 @@ public class RecordatoriosController : ControllerBase
         var resultado = await _recordatorioService.ListarPorVehiculoAsync(vehiculoId, estado, soloVencidos, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -85,7 +75,7 @@ public class RecordatoriosController : ControllerBase
         var resultado = await _recordatorioService.ListarPorUsuarioAsync(estado, soloVencidos, cancellationToken);
 
         if (!resultado.Exito)
-            return Unauthorized(new { mensaje = resultado.Mensaje });
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -106,15 +96,7 @@ public class RecordatoriosController : ControllerBase
         var resultado = await _recordatorioService.CrearPorFechaAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del recordatorio inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del recordatorio inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/recordatorios/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -135,15 +117,7 @@ public class RecordatoriosController : ControllerBase
         var resultado = await _recordatorioService.CrearPorKilometrajeAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del recordatorio inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del recordatorio inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/recordatorios/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -155,17 +129,13 @@ public class RecordatoriosController : ControllerBase
     [ProducesResponseType(typeof(RecordatorioResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Concluir(Guid id, CancellationToken cancellationToken)
     {
         var resultado = await _recordatorioService.ConcluirAsync(id, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }

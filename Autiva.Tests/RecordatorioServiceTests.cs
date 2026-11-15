@@ -105,7 +105,7 @@ public class RecordatorioServiceTests
 
         _recordatorioRepository
             .Setup(r => r.ObtenerResumenRecordatoriosAsync(VehiculoId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((3, proximoRecordatorio));
+            .ReturnsAsync((3, (IReadOnlyList<Recordatorio>)new List<Recordatorio> { proximoRecordatorio }));
 
         var servicio = CrearServicio();
         var resultado = await servicio.ObtenerResumenAsync(VehiculoId);
@@ -141,7 +141,7 @@ public class RecordatorioServiceTests
 
         _recordatorioRepository
             .Setup(r => r.ObtenerResumenRecordatoriosAsync(VehiculoId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((0, (Recordatorio?)null));
+            .ReturnsAsync((0, (IReadOnlyList<Recordatorio>)Array.Empty<Recordatorio>()));
 
         var servicio = CrearServicio();
         var resultado = await servicio.ObtenerResumenAsync(VehiculoId);

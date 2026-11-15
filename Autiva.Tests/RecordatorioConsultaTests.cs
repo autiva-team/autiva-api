@@ -84,6 +84,7 @@ public class RecordatorioConsultaTests
         {
             Id = Guid.NewGuid(),
             VehiculoId = VehiculoId,
+            Vehiculo = VehiculoPrueba(10000), // en producción siempre viene vía Include
             Titulo = "Cambio de pastillas",
             Tipo = "mantenimiento",
             Criterio = "por_kilometraje",
@@ -146,6 +147,64 @@ public class RecordatorioConsultaTests
     }
 
     [Fact]
+    public async Task ConcluirAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        var resultado = await servicio.ConcluirAsync(Guid.NewGuid());
+
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task ConcluirAsync_RecordatorioNoExiste_RegresaNoEncontrado()
+    {
+        // Mismo resultado (null) si no existe, está borrado, su vehículo está borrado o
+        // es de otro usuario: el repositorio ya filtra todos esos casos en una consulta.
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _recordatorioRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Recordatorio?)null);
+        var servicio = CrearServicio();
+
+        var resultado = await servicio.ConcluirAsync(Guid.NewGuid());
+
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+        Assert.Equal("No se encontró el recordatorio.", resultado.Mensaje);
+    }
+
+    [Fact]
+    public async Task ConcluirAsync_YaEstabaConcluido_RegresaConflicto()
+    {
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        var recordatorioId = Guid.NewGuid();
+        var recordatorio = new Recordatorio
+        {
+            Id = recordatorioId,
+            VehiculoId = VehiculoId,
+            Vehiculo = VehiculoPrueba(),
+            Titulo = "Pago tenencia",
+            Criterio = "por_fecha",
+            Estado = "concluido",
+            FechaConcluido = DateTime.UtcNow.AddDays(-1)
+        };
+        _recordatorioRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, recordatorioId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(recordatorio);
+        var servicio = CrearServicio();
+
+        var resultado = await servicio.ConcluirAsync(recordatorioId);
+
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.Conflicto);
+        Assert.Equal("El recordatorio ya estaba concluido.", resultado.Mensaje);
+        _recordatorioRepository.Verify(r => r.ActualizarAsync(It.IsAny<Recordatorio>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Concluir_MarcaEstadoConcluidoYActualizaFecha()
     {
         _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
@@ -163,7 +222,7 @@ public class RecordatorioConsultaTests
         };
 
         _recordatorioRepository
-            .Setup(r => r.ObtenerPorIdAsync(recordatorioId, It.IsAny<CancellationToken>()))
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, recordatorioId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(recordatorio);
 
         var servicio = CrearServicio();
