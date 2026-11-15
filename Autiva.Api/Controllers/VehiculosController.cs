@@ -140,4 +140,38 @@ public class VehiculosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Edita marca, modelo, año, placas, color, foto y estatus de un vehículo del
+    /// usuario del token. No edita odómetro, kilometraje inicial ni "es principal".
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(VehiculoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Editar(
+        Guid id,
+        [FromBody] EditarVehiculoRequest solicitud,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.EditarAsync(id, solicitud, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            if (resultado.NoEncontrado)
+                return NotFound(new { mensaje = resultado.Mensaje });
+
+            if (resultado.Conflicto)
+                return Conflict(new { mensaje = resultado.Mensaje });
+
+            return BadRequest(new { mensaje = "Datos del vehículo inválidos.", errores = resultado.Errores });
+        }
+
+        return Ok(resultado.Datos);
+    }
 }
