@@ -32,4 +32,10 @@ public interface IServicioRepository
     /// </summary>
     Task<(IReadOnlyList<ServicioMantenimiento> Items, int TotalRegistros)> ListarHistorialAsync(
         Guid vehiculoId, int pagina, int tamano, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Servicio no eliminado del vehículo con <c>meta_proximo_km</c>, el más reciente por
+    /// fecha; null si no tiene ninguno.
+    /// </summary>
+    Task<ServicioMantenimiento?> ObtenerUltimoConMetaAsync(Guid vehiculoId, CancellationToken cancellationToken = default);
 }

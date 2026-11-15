@@ -138,6 +138,59 @@ public class ServicioService : IServicioService
         return ResultadoServicio.CrearExito(MapearRespuesta(servicio, servicio.TipoServicio.Nombre));
     }
 
+    public async Task<ResultadoAvanceServicio> ObtenerAvanceAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoAvanceServicio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        // Mismo mensaje si no existe o si es de otro usuario: no se revela cuál es el caso.
+        if (vehiculo is null)
+            return ResultadoAvanceServicio.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var servicio = await _servicioRepository.ObtenerUltimoConMetaAsync(vehiculoId, cancellationToken);
+
+        // Sin servicio con meta no es error: el frontend invita a registrar uno.
+        if (servicio is null)
+            return ResultadoAvanceServicio.CrearExito(new AvanceServicioResponse { OdometroActual = vehiculo.OdometroActual });
+
+        return ResultadoAvanceServicio.CrearExito(CalcularAvance(servicio, vehiculo.OdometroActual));
+    }
+
+    private static AvanceServicioResponse CalcularAvance(ServicioMantenimiento servicio, int odometroActual)
+    {
+        var hoy = ZonaMexico.Ahora();
+        var metaKm = servicio.MetaProximoKm!.Value;
+        var kmRestantes = CalculadoraAvanceServicio.KmRestantes(metaKm, odometroActual);
+        var kmPorDia = CalculadoraAvanceServicio.KmPorDia(servicio.KilometrajeServicio, odometroActual, servicio.Fecha, hoy);
+        var diasEstimados = CalculadoraAvanceServicio.DiasEstimados(kmRestantes, kmPorDia);
+
+        return new AvanceServicioResponse
+        {
+            UltimoServicio = new UltimoServicioConMetaDto
+            {
+                Id = servicio.Id,
+                Tipo = servicio.TipoServicio.Nombre,
+                Fecha = servicio.Fecha,
+                KilometrajeServicio = servicio.KilometrajeServicio
+            },
+            MetaKm = metaKm,
+            OdometroActual = odometroActual,
+            KmRestantes = kmRestantes,
+            PorcentajeAvance = CalculadoraAvanceServicio.PorcentajeAvance(servicio.KilometrajeServicio, metaKm, odometroActual),
+            Vencido = CalculadoraAvanceServicio.Vencido(kmRestantes),
+            KmPorDia = kmPorDia,
+            DiasEstimados = diasEstimados,
+            FechaEstimada = CalculadoraAvanceServicio.FechaEstimada(hoy, diasEstimados),
+            FechaRetorno = servicio.FechaRetorno
+        };
+    }
+
     private static (int Pagina, int Tamano) NormalizarPaginacion(int pagina, int tamano) =>
         (Math.Max(pagina, 1), Math.Clamp(tamano, 1, 50));
 

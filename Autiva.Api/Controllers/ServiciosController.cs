@@ -103,4 +103,28 @@ public class ServiciosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Avance hacia el próximo servicio del vehículo, según la meta de kilometraje del
+    /// último servicio que la tenga. Sin un servicio con meta, no es error: regresa
+    /// el odómetro actual y el resto de los campos en null.
+    /// </summary>
+    [HttpGet("proximo")]
+    [ProducesResponseType(typeof(AvanceServicioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerProximo(Guid vehiculoId, CancellationToken cancellationToken)
+    {
+        var resultado = await _servicioService.ObtenerAvanceAsync(vehiculoId, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
 }
