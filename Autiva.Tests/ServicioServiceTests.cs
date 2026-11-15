@@ -401,4 +401,308 @@ public class ServicioServiceTests
         Assert.Equal("Aceite y filtros", resultado.Datos.TipoServicio);
         Assert.Equal(11700, resultado.Datos.KilometrajeServicio);
     }
+
+    // ---------- ObtenerAvanceAsync ----------
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_VehiculoNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_SinServicioConMeta_RegresaOdometroYRestoNull()
+    {
+        // Arrange: no es error, el frontend invita a registrar un servicio con meta.
+        PrepararUsuarioYVehiculo(odometroActual: 12000);
+        _servicioRepository
+            .Setup(r => r.ObtenerUltimoConMetaAsync(VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServicioMantenimiento?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        var datos = resultado.Datos!;
+        Assert.Equal(12000, datos.OdometroActual);
+        Assert.Null(datos.UltimoServicio);
+        Assert.Null(datos.MetaKm);
+        Assert.Null(datos.KmRestantes);
+        Assert.Null(datos.PorcentajeAvance);
+        Assert.Null(datos.Vencido);
+        Assert.Null(datos.KmPorDia);
+        Assert.Null(datos.DiasEstimados);
+        Assert.Null(datos.FechaEstimada);
+        Assert.Null(datos.FechaRetorno);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_ConServicioConMeta_CalculaAvanceCompleto()
+    {
+        // Arrange: servicio de hace 20 días en 10000 km con meta en 15000; odómetro
+        // actual en 12000 (2000 km recorridos, 100 km/día). Verificado a mano.
+        PrepararUsuarioYVehiculo(odometroActual: 12000);
+        var hoyMexico = ZonaMexico.Ahora();
+        var fechaServicio = DateOnly.FromDateTime(hoyMexico).AddDays(-20);
+        var fechaRetorno = fechaServicio.AddDays(1);
+        var ultimoConMeta = new ServicioMantenimiento
+        {
+            Id = Guid.NewGuid(),
+            VehiculoId = VehiculoId,
+            Fecha = fechaServicio,
+            KilometrajeServicio = 10000,
+            MetaProximoKm = 15000,
+            FechaRetorno = fechaRetorno,
+            TipoServicio = new TipoServicio { Id = 1, Nombre = "Aceite y filtros" }
+        };
+        _servicioRepository
+            .Setup(r => r.ObtenerUltimoConMetaAsync(VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ultimoConMeta);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        var datos = resultado.Datos!;
+        Assert.Equal(ultimoConMeta.Id, datos.UltimoServicio!.Id);
+        Assert.Equal(15000, datos.MetaKm);
+        Assert.Equal(12000, datos.OdometroActual);
+        Assert.Equal(3000, datos.KmRestantes);
+        Assert.Equal(40.0m, datos.PorcentajeAvance);
+        Assert.False(datos.Vencido);
+        Assert.Equal(100m, datos.KmPorDia);
+        Assert.Equal(30, datos.DiasEstimados);
+        Assert.Equal(DateOnly.FromDateTime(hoyMexico).AddDays(30), datos.FechaEstimada);
+        Assert.Equal(fechaRetorno, datos.FechaRetorno);
+    }
+
+    // ---------- EditarAsync ----------
+
+    private static EditarServicioRequest SolicitudEditarValida() => new()
+    {
+        TipoServicioId = 1,
+        Fecha = Hoy,
+        KilometrajeServicio = 1500,
+        Costo = 900m,
+        MetaProximoKm = 6500,
+        FechaRetorno = Hoy
+    };
+
+    private void PrepararServicioYVehiculoParaEditar(ServicioMantenimiento servicio, int kilometrajeInicial = 1000)
+    {
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _servicioRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, servicio.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(servicio);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(kilometrajeInicial));
+        _servicioRepository
+            .Setup(r => r.ObtenerTipoServicioAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TipoServicio { Id = 1, Nombre = "Aceite y filtros" });
+    }
+
+    [Fact]
+    public async Task EditarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(Guid.NewGuid(), SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task EditarAsync_ServicioNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _servicioRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServicioMantenimiento?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(Guid.NewGuid(), SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task EditarAsync_TipoServicioInexistente_RegresaValidacion()
+    {
+        // Arrange
+        var registro = Servicio(Hoy, 1500);
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _servicioRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, registro.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registro);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo());
+        _servicioRepository
+            .Setup(r => r.ObtenerTipoServicioAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TipoServicio?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(registro.Id, SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El tipo de servicio no existe.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_CostoNegativo_RegresaValidacion()
+    {
+        // Arrange
+        var registro = Servicio(Hoy, 1500);
+        PrepararServicioYVehiculoParaEditar(registro);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.Costo = -1m;
+
+        // Act
+        var resultado = await servicio.EditarAsync(registro.Id, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El costo no puede ser negativo.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_MetaMenorAlKilometraje_RegresaValidacion()
+    {
+        // Arrange
+        var registro = Servicio(Hoy, 1500);
+        PrepararServicioYVehiculoParaEditar(registro);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.KilometrajeServicio = 1500;
+        solicitud.MetaProximoKm = 1200;
+
+        // Act
+        var resultado = await servicio.EditarAsync(registro.Id, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("La meta del próximo servicio debe ser mayor al kilometraje del servicio.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_DatosValidos_ActualizaYRegresaExito()
+    {
+        // Arrange
+        var registro = Servicio(Hoy, 1500);
+        PrepararServicioYVehiculoParaEditar(registro);
+        _servicioRepository
+            .Setup(r => r.EditarAsync(It.IsAny<ServicioMantenimiento>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServicioMantenimiento s, CancellationToken _) => s);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.Costo = 950m;
+        solicitud.Taller = "Taller Nuevo";
+
+        // Act
+        var resultado = await servicio.EditarAsync(registro.Id, solicitud);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        Assert.Equal(950m, resultado.Datos!.Costo);
+        Assert.Equal("Taller Nuevo", resultado.Datos.Taller);
+        Assert.Equal("Aceite y filtros", resultado.Datos.TipoServicio);
+    }
+
+    // ---------- EliminarAsync ----------
+
+    [Fact]
+    public async Task EliminarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_ServicioNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _servicioRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServicioMantenimiento?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_ServicioExiste_BorraYRegresaExito()
+    {
+        // Arrange
+        var registro = Servicio(Hoy, 1500);
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _servicioRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, registro.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(registro);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(registro.Id);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _servicioRepository.Verify(r => r.EliminarAsync(registro.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

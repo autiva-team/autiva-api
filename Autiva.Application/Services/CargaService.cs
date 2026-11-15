@@ -171,6 +171,83 @@ public class CargaService : ICargaService
         return ResultadoCarga.CrearExito(MapearRespuesta(carga, carga.TipoCombustible.Nombre, CalcularKmRecorridos(carga, anterior)));
     }
 
+    public async Task<ResultadoCarga> EditarAsync(
+        Guid cargaId,
+        EditarCargaRequest solicitud,
+        CancellationToken cancellationToken = default)
+    {
+        solicitud ??= new EditarCargaRequest();
+
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoCarga.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var carga = await _cargaRepository.ObtenerPorUsuarioAsync(usuarioId.Value, cargaId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminada o es de otro usuario: no se revela cuál es el caso.
+        if (carga is null)
+            return ResultadoCarga.CrearNoEncontrado("No se encontró la carga.");
+
+        var fechaHora = solicitud.FechaHora ?? DateTime.UtcNow;
+        var gasolinera = string.IsNullOrWhiteSpace(solicitud.Gasolinera) ? null : solicitud.Gasolinera.Trim();
+        var folio = string.IsNullOrWhiteSpace(solicitud.Folio) ? null : solicitud.Folio.Trim();
+        var notas = string.IsNullOrWhiteSpace(solicitud.Notas) ? null : solicitud.Notas.Trim();
+
+        var (anterior, siguiente) = await _cargaRepository.ObtenerVecinasAsync(
+            carga.VehiculoId, fechaHora, cargaId, cancellationToken);
+
+        // El mínimo lo pone la carga anterior (0 si es la primera); ValidadorCarga ya
+        // rechaza un odómetro menor a ese mínimo con el mismo mensaje del registro.
+        var errores = ValidadorCarga.Validar(solicitud.Litros, solicitud.CostoTotal, solicitud.Odometro, anterior?.Odometro ?? 0, fechaHora);
+
+        if (siguiente is not null && solicitud.Odometro > siguiente.Odometro)
+            errores.Add($"El odómetro no puede ser mayor al de la siguiente carga ({siguiente.Odometro} km).");
+
+        var tipoCombustible = await _cargaRepository.ObtenerTipoCombustibleAsync(solicitud.TipoCombustibleId, cancellationToken);
+
+        if (tipoCombustible is null)
+            errores.Add("El tipo de combustible no existe.");
+
+        if (errores.Count > 0)
+            return ResultadoCarga.CrearValidacion(errores);
+
+        carga.TipoCombustibleId = solicitud.TipoCombustibleId;
+        carga.FechaHora = fechaHora;
+        carga.Litros = solicitud.Litros;
+        carga.CostoTotal = solicitud.CostoTotal;
+        carga.Odometro = solicitud.Odometro;
+        carga.TanqueLleno = solicitud.TanqueLleno;
+        carga.Gasolinera = gasolinera;
+        carga.Folio = folio;
+        carga.Notas = notas;
+
+        var editada = await _cargaRepository.EditarAsync(carga, cancellationToken);
+
+        var anteriorParaKm = await _cargaRepository.ObtenerAnteriorAsync(
+            editada.VehiculoId, editada.FechaHora, editada.Odometro, cancellationToken);
+
+        return ResultadoCarga.CrearExito(MapearRespuesta(editada, tipoCombustible!.Nombre, CalcularKmRecorridos(editada, anteriorParaKm)));
+    }
+
+    public async Task<ResultadoEliminarCarga> EliminarAsync(Guid cargaId, CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoEliminarCarga.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var carga = await _cargaRepository.ObtenerPorUsuarioAsync(usuarioId.Value, cargaId, cancellationToken);
+
+        // Mismo mensaje si no existe, está eliminada o es de otro usuario: no se revela cuál es el caso.
+        if (carga is null)
+            return ResultadoEliminarCarga.CrearNoEncontrado("No se encontró la carga.");
+
+        await _cargaRepository.EliminarAsync(cargaId, cancellationToken);
+
+        return ResultadoEliminarCarga.CrearExito();
+    }
+
     /// <summary>
     /// Mapea cada carga a su <see cref="CargaResponse"/> calculando los km recorridos contra
     /// la anterior. Las cargas vienen de más reciente a más antigua: la anterior de cada una

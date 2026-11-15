@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de registrar un gasto de otra categoría.
 /// </summary>
-public class ResultadoGasto
+public class ResultadoGasto : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

@@ -11,7 +11,7 @@ namespace Autiva.Api.Controllers;
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}/gastos")]
 [Authorize]
-public class GastosController : ControllerBase
+public class GastosController : AutivaControllerBase
 {
     private readonly IGastoService _gastoService;
 
@@ -38,15 +38,7 @@ public class GastosController : ControllerBase
         var resultado = await _gastoService.ObtenerResumenAsync(vehiculoId, anio, mes, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Validacion)
-                return BadRequest(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -69,18 +61,7 @@ public class GastosController : ControllerBase
         var resultado = await _gastoService.RegistrarAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Conflicto)
-                return Conflict(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del gasto inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del gasto inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/gastos/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -106,15 +87,7 @@ public class GastosController : ControllerBase
         var resultado = await _gastoService.ListarAsync(vehiculoId, anio, mes, categoriaId, pagina, tamano, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Validacion)
-                return BadRequest(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
