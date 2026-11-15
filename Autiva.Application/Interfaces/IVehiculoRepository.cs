@@ -45,4 +45,31 @@ public interface IVehiculoRepository
     /// Actualiza el odómetro actual del vehículo.
     /// </summary>
     Task<Vehiculo> ActualizarOdometroAsync(Guid usuarioId, Guid vehiculoId, int nuevoOdometro, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Indica si otro vehículo no eliminado del usuario (distinto a <paramref name="vehiculoIdExcluido"/>)
+    /// ya tiene esas placas. Las placas del propio vehículo no cuentan como repetidas.
+    /// </summary>
+    Task<bool> ExistePlacasEnOtroVehiculoAsync(Guid usuarioId, string placas, Guid vehiculoIdExcluido, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Edita marca, modelo, año, placas, color, foto y estatus del vehículo, y actualiza
+    /// <c>actualizado_en</c>.
+    /// </summary>
+    Task<Vehiculo> EditarAsync(
+        Guid usuarioId, Guid vehiculoId, string marca, string modelo, short anio, string placas,
+        string? color, string? fotoUrl, string estatus, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Vehículo no eliminado más reciente del usuario, distinto a <paramref name="vehiculoIdExcluido"/>;
+    /// null si no le queda ninguno.
+    /// </summary>
+    Task<Vehiculo?> ObtenerMasRecienteDistintoAsync(Guid usuarioId, Guid vehiculoIdExcluido, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra lógicamente el vehículo y todo lo suyo (cargas, servicios, gastos, recordatorios,
+    /// pólizas, verificaciones y documentos), todo en una transacción. Si <paramref name="nuevoPrincipalId"/>
+    /// viene, lo marca como el nuevo vehículo principal del usuario.
+    /// </summary>
+    Task EliminarAsync(Guid usuarioId, Guid vehiculoId, Guid? nuevoPrincipalId, CancellationToken cancellationToken = default);
 }
