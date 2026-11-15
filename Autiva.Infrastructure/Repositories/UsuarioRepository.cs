@@ -23,6 +23,25 @@ public class UsuarioRepository : IUsuarioRepository
     public Task<Usuario?> ObtenerPorCorreoAsync(string correo, CancellationToken cancellationToken = default) =>
         _context.Usuario.FirstOrDefaultAsync(u => u.Correo == correo, cancellationToken);
 
+    public Task<Usuario?> ObtenerPorIdAsync(Guid usuarioId, CancellationToken cancellationToken = default) =>
+        _context.Usuario.FirstOrDefaultAsync(u => u.Id == usuarioId, cancellationToken);
+
+    public Task<bool> ExisteCorreoEnOtroUsuarioAsync(string correo, Guid usuarioIdExcluido, CancellationToken cancellationToken = default) =>
+        _context.Usuario.AnyAsync(u => u.Correo == correo && u.Id != usuarioIdExcluido, cancellationToken);
+
+    public async Task<Usuario> EditarPerfilAsync(Guid usuarioId, string nombre, string correo, CancellationToken cancellationToken = default)
+    {
+        var usuario = await _context.Usuario.FirstAsync(u => u.Id == usuarioId, cancellationToken);
+
+        usuario.Nombre = nombre;
+        usuario.Correo = correo;
+        usuario.ActualizadoEn = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return usuario;
+    }
+
     public async Task<bool> AgregarAsync(Usuario usuario, CancellationToken cancellationToken = default)
     {
         _context.Usuario.Add(usuario);
