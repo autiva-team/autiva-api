@@ -28,6 +28,15 @@ public static class DependencyInjection
         services.AddScoped<ISincronizacionRepository, SincronizacionRepository>();
         services.AddScoped<IPushRepository, PushRepository>();
         services.AddScoped<IPushSender, WebPushSender>();
+        services.AddScoped<ITokenRecuperacionRepository, TokenRecuperacionRepository>();
+        services.AddScoped<IPreferenciasRepository, PreferenciasRepository>();
+
+        // Sin configuración SMTP (Correo:Host), se usa el que solo registra el enlace en el
+        // log: cubre desarrollo y pruebas sin depender de un servidor de correo real.
+        if (string.IsNullOrWhiteSpace(configuration["Correo:Host"]))
+            services.AddScoped<IEnviadorCorreo, RegistroEnviadorCorreo>();
+        else
+            services.AddScoped<IEnviadorCorreo, SmtpEnviadorCorreo>();
 
         return services;
     }
