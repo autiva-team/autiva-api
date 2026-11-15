@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<ISincronizacionService, SincronizacionService>();
         services.AddScoped<IPushService, PushService>();
         services.AddScoped<IRecuperacionContrasenaService, RecuperacionContrasenaService>();
+        services.AddScoped<IEstadisticasService, EstadisticasService>();
 
         return services;
     }
