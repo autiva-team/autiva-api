@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de consultar listas de recordatorios.
 /// </summary>
-public class ResultadoListaRecordatorios
+public class ResultadoListaRecordatorios : IResultadoOperacion
 {
     public bool Exito { get; init; }
     public bool NoAutorizado { get; init; }

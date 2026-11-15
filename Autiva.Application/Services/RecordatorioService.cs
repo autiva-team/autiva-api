@@ -44,7 +44,10 @@ public class RecordatorioService : IRecordatorioService
 
         var (totalCargas, ultimaCarga) = await _recordatorioRepository.ObtenerResumenCargasAsync(vehiculoId, cancellationToken);
         var (totalServicios, ultimoServicio) = await _recordatorioRepository.ObtenerResumenServiciosAsync(vehiculoId, cancellationToken);
-        var (totalRecordatorios, proximoRecordatorio) = await _recordatorioRepository.ObtenerResumenRecordatoriosAsync(vehiculoId, cancellationToken);
+        var (totalRecordatorios, pendientes) = await _recordatorioRepository.ObtenerResumenRecordatoriosAsync(vehiculoId, cancellationToken);
+
+        var hoyMexico = DateOnly.FromDateTime(ZonaMexico.Ahora());
+        var proximoRecordatorio = OrdenadorRecordatorios.OrdenarPorUrgencia(pendientes, hoyMexico).FirstOrDefault();
 
         var respuesta = new VehiculoResumenResponse
         {
@@ -180,9 +183,10 @@ public class RecordatorioService : IRecordatorioService
             return ResultadoListaRecordatorios.CrearNoEncontrado("No se encontró el vehículo.");
 
         var recordatorios = await _recordatorioRepository.ObtenerPorVehiculoAsync(vehiculoId, estado, cancellationToken);
+        var ordenados = OrdenadorRecordatorios.OrdenarPorUrgencia(recordatorios, DateOnly.FromDateTime(ZonaMexico.Ahora()));
 
         var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
-        var lista = recordatorios
+        var lista = ordenados
             .Select(r => MapearDetalle(r, vehiculo.OdometroActual, hoy, vehiculo.Placas, $"{vehiculo.Marca} {vehiculo.Modelo}"))
             .Where(r => !soloVencidos || r.EstaVencido)
             .ToList();
@@ -201,9 +205,10 @@ public class RecordatorioService : IRecordatorioService
             return ResultadoListaRecordatorios.CrearNoAutorizado("Token inválido o usuario no identificado.");
 
         var recordatorios = await _recordatorioRepository.ObtenerPorUsuarioAsync(usuarioId.Value, estado, cancellationToken);
+        var ordenados = OrdenadorRecordatorios.OrdenarPorUrgencia(recordatorios, DateOnly.FromDateTime(ZonaMexico.Ahora()));
 
         var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
-        var lista = recordatorios
+        var lista = ordenados
             .Select(r => MapearDetalle(
                 r,
                 r.Vehiculo?.OdometroActual ?? 0,
@@ -225,13 +230,15 @@ public class RecordatorioService : IRecordatorioService
         if (usuarioId is null || usuarioId == Guid.Empty)
             return ResultadoRecordatorio.CrearNoAutorizado("Token inválido o usuario no identificado.");
 
-        var recordatorio = await _recordatorioRepository.ObtenerPorIdAsync(recordatorioId, cancellationToken);
+        var recordatorio = await _recordatorioRepository.ObtenerDetalleAsync(usuarioId.Value, recordatorioId, cancellationToken);
 
+        // Mismo mensaje si no existe, está eliminado, su vehículo está eliminado o es de
+        // otro usuario: no se revela cuál es el caso.
         if (recordatorio is null)
             return ResultadoRecordatorio.CrearNoEncontrado("No se encontró el recordatorio.");
 
-        if (recordatorio.Vehiculo == null || recordatorio.Vehiculo.UsuarioId != usuarioId.Value)
-            return ResultadoRecordatorio.CrearNoAutorizado("No tiene permisos para modificar este recordatorio.");
+        if (recordatorio.Estado == "concluido")
+            return ResultadoRecordatorio.CrearConflicto("El recordatorio ya estaba concluido.");
 
         recordatorio.Estado = "concluido";
         recordatorio.FechaConcluido = DateTime.UtcNow;
