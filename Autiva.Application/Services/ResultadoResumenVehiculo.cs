@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de obtener el resumen general de un vehículo.
 /// </summary>
-public class ResultadoResumenVehiculo
+public class ResultadoResumenVehiculo : IResultadoOperacion
 {
     public bool Exito { get; init; }
     public bool NoAutorizado { get; init; }

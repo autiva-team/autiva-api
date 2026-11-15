@@ -5,11 +5,12 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de crear un recordatorio.
 /// </summary>
-public class ResultadoRecordatorio
+public class ResultadoRecordatorio : IResultadoOperacion
 {
     public bool Exito { get; init; }
     public bool NoAutorizado { get; init; }
     public bool NoEncontrado { get; init; }
+    public bool Conflicto { get; init; }
     public string? Mensaje { get; init; }
     public IReadOnlyList<string> Errores { get; init; } = Array.Empty<string>();
     public RecordatorioResponse? Datos { get; init; }
@@ -25,6 +26,13 @@ public class ResultadoRecordatorio
     {
         Exito = false,
         NoEncontrado = true,
+        Mensaje = mensaje
+    };
+
+    public static ResultadoRecordatorio CrearConflicto(string mensaje) => new()
+    {
+        Exito = false,
+        Conflicto = true,
         Mensaje = mensaje
     };
 

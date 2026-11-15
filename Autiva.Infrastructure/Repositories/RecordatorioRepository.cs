@@ -46,24 +46,18 @@ public class RecordatorioRepository : IRecordatorioRepository
         return (total, ultimoServicio);
     }
 
-    public async Task<(int Total, Recordatorio? Proximo)> ObtenerResumenRecordatoriosAsync(
+    public async Task<(int Total, IReadOnlyList<Recordatorio> Pendientes)> ObtenerResumenRecordatoriosAsync(
         Guid vehiculoId,
         CancellationToken cancellationToken = default)
     {
-        var consulta = _context.Recordatorio
+        var pendientes = await _context.Recordatorio
+            .Include(r => r.Vehiculo)
             .Where(r => r.VehiculoId == vehiculoId &&
                         r.EliminadoEn == null &&
-                        r.Estado == "pendiente");
+                        r.Estado == "pendiente")
+            .ToListAsync(cancellationToken);
 
-        var total = await consulta.CountAsync(cancellationToken);
-
-        var proximo = await consulta
-            .OrderBy(r => r.FechaLimite == null ? 1 : 0)
-            .ThenBy(r => r.FechaLimite)
-            .ThenBy(r => r.KmObjetivo)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return (total, proximo);
+        return (pendientes.Count, pendientes);
     }
 
     public async Task<Recordatorio> AgregarAsync(Recordatorio recordatorio, CancellationToken cancellationToken = default)
@@ -87,11 +81,8 @@ public class RecordatorioRepository : IRecordatorioRepository
             consulta = consulta.Where(r => r.Estado == estado.Trim().ToLower());
         }
 
-        return await consulta
-            .OrderBy(r => r.FechaLimite == null ? 1 : 0)
-            .ThenBy(r => r.FechaLimite)
-            .ThenBy(r => r.KmObjetivo)
-            .ToListAsync(cancellationToken);
+        // Sin orden aquí: el orden por urgencia lo calcula el servicio (OrdenadorRecordatorios).
+        return await consulta.ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Recordatorio>> ObtenerPorUsuarioAsync(
@@ -110,19 +101,17 @@ public class RecordatorioRepository : IRecordatorioRepository
             consulta = consulta.Where(r => r.Estado == estado.Trim().ToLower());
         }
 
-        return await consulta
-            .OrderBy(r => r.FechaLimite == null ? 1 : 0)
-            .ThenBy(r => r.FechaLimite)
-            .ThenBy(r => r.KmObjetivo)
-            .ToListAsync(cancellationToken);
+        // Sin orden aquí: el orden por urgencia lo calcula el servicio (OrdenadorRecordatorios).
+        return await consulta.ToListAsync(cancellationToken);
     }
 
-    public async Task<Recordatorio?> ObtenerPorIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        return await _context.Recordatorio
+    public Task<Recordatorio?> ObtenerDetalleAsync(Guid usuarioId, Guid recordatorioId, CancellationToken cancellationToken = default) =>
+        _context.Recordatorio
             .Include(r => r.Vehiculo)
-            .FirstOrDefaultAsync(r => r.Id == id && r.EliminadoEn == null, cancellationToken);
-    }
+            .FirstOrDefaultAsync(
+                r => r.Id == recordatorioId && r.EliminadoEn == null &&
+                     r.Vehiculo.UsuarioId == usuarioId && r.Vehiculo.EliminadoEn == null,
+                cancellationToken);
 
     public async Task ActualizarAsync(Recordatorio recordatorio, CancellationToken cancellationToken = default)
     {
