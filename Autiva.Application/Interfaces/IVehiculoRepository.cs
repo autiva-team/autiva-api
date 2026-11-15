@@ -59,4 +59,17 @@ public interface IVehiculoRepository
     Task<Vehiculo> EditarAsync(
         Guid usuarioId, Guid vehiculoId, string marca, string modelo, short anio, string placas,
         string? color, string? fotoUrl, string estatus, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Vehículo no eliminado más reciente del usuario, distinto a <paramref name="vehiculoIdExcluido"/>;
+    /// null si no le queda ninguno.
+    /// </summary>
+    Task<Vehiculo?> ObtenerMasRecienteDistintoAsync(Guid usuarioId, Guid vehiculoIdExcluido, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra lógicamente el vehículo y todo lo suyo (cargas, servicios, gastos, recordatorios,
+    /// pólizas, verificaciones y documentos), todo en una transacción. Si <paramref name="nuevoPrincipalId"/>
+    /// viene, lo marca como el nuevo vehículo principal del usuario.
+    /// </summary>
+    Task EliminarAsync(Guid usuarioId, Guid vehiculoId, Guid? nuevoPrincipalId, CancellationToken cancellationToken = default);
 }

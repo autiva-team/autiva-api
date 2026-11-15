@@ -752,4 +752,109 @@ public class VehiculoServiceTests
         Assert.Equal("Rojo", resultado.Datos.Color);
         Assert.Equal("en_taller", resultado.Datos.Estatus);
     }
+
+    // ---------- EliminarAsync ----------
+
+    [Fact]
+    public async Task EliminarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_VehiculoNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_NoEsPrincipal_NoBuscaReemplazoYRegresaExito()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(esPrincipal: false));
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _vehiculoRepository.Verify(
+            r => r.ObtenerMasRecienteDistintoAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _vehiculoRepository.Verify(
+            r => r.EliminarAsync(UsuarioId, VehiculoId, null, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_EsPrincipalYQuedanOtros_MarcaElMasRecienteComoPrincipal()
+    {
+        // Arrange
+        var otroVehiculoId = Guid.NewGuid();
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(esPrincipal: true));
+        _vehiculoRepository
+            .Setup(r => r.ObtenerMasRecienteDistintoAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Vehiculo { Id = otroVehiculoId, UsuarioId = UsuarioId });
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _vehiculoRepository.Verify(
+            r => r.EliminarAsync(UsuarioId, VehiculoId, otroVehiculoId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_EsPrincipalYNoQuedanOtros_NoMarcaNingunoComoPrincipal()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Vehiculo(esPrincipal: true));
+        _vehiculoRepository
+            .Setup(r => r.ObtenerMasRecienteDistintoAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _vehiculoRepository.Verify(
+            r => r.EliminarAsync(UsuarioId, VehiculoId, null, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
 }

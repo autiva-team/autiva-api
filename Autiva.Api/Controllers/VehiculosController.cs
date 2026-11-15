@@ -174,4 +174,28 @@ public class VehiculosController : ControllerBase
 
         return Ok(resultado.Datos);
     }
+
+    /// <summary>
+    /// Elimina (borrado lógico) un vehículo del usuario del token y todo lo suyo
+    /// (cargas, servicios, gastos, recordatorios, pólizas, verificaciones y documentos).
+    /// Si era el principal, pasa el puesto al vehículo restante más reciente.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Eliminar(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _vehiculoService.EliminarAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return NoContent();
+    }
 }

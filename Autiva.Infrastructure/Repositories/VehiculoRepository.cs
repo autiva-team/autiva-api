@@ -152,4 +152,120 @@ public class VehiculoRepository : IVehiculoRepository
 
         return vehiculo;
     }
+
+    public Task<Vehiculo?> ObtenerMasRecienteDistintoAsync(Guid usuarioId, Guid vehiculoIdExcluido, CancellationToken cancellationToken = default) =>
+        _context.Vehiculo
+            .Where(v => v.UsuarioId == usuarioId && v.Id != vehiculoIdExcluido && v.EliminadoEn == null)
+            .OrderByDescending(v => v.CreadoEn)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task EliminarAsync(Guid usuarioId, Guid vehiculoId, Guid? nuevoPrincipalId, CancellationToken cancellationToken = default)
+    {
+        var estrategia = _context.Database.CreateExecutionStrategy();
+
+        // Misma estrategia que en MarcarActivoAsync/AgregarAsync: CreateExecutionStrategy
+        // envuelve la transacción completa porque el DbContext tiene EnableRetryOnFailure.
+        await estrategia.ExecuteAsync(async () =>
+        {
+            await using var transaccion = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            var ahora = DateTime.UtcNow;
+
+            await MarcarEliminadoEnRelacionadosAsync(vehiculoId, ahora, cancellationToken);
+
+            var vehiculo = await _context.Vehiculo.FirstAsync(
+                v => v.Id == vehiculoId && v.UsuarioId == usuarioId, cancellationToken);
+
+            vehiculo.EliminadoEn = ahora;
+            vehiculo.EsPrincipal = false;
+            vehiculo.ActualizadoEn = ahora;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            if (nuevoPrincipalId is not null)
+            {
+                // El índice único filtrado UX_vehiculo_principal exige que el vehículo
+                // borrado ya haya quedado desmarcado (arriba) antes de marcar al nuevo.
+                var nuevoPrincipal = await _context.Vehiculo.FirstAsync(
+                    v => v.Id == nuevoPrincipalId.Value && v.UsuarioId == usuarioId, cancellationToken);
+
+                nuevoPrincipal.EsPrincipal = true;
+                nuevoPrincipal.ActualizadoEn = ahora;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            await transaccion.CommitAsync(cancellationToken);
+        });
+    }
+
+    /// <summary>
+    /// Pone <c>eliminado_en</c> a todo lo del vehículo que aún no esté borrado: cargas,
+    /// servicios, gastos, recordatorios, pólizas, verificaciones y documentos.
+    /// </summary>
+    private async Task MarcarEliminadoEnRelacionadosAsync(Guid vehiculoId, DateTime ahora, CancellationToken cancellationToken)
+    {
+        var cargas = await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var carga in cargas)
+        {
+            carga.EliminadoEn = ahora;
+            carga.ActualizadoEn = ahora;
+        }
+
+        var servicios = await _context.ServicioMantenimiento
+            .Where(s => s.VehiculoId == vehiculoId && s.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var servicio in servicios)
+        {
+            servicio.EliminadoEn = ahora;
+            servicio.ActualizadoEn = ahora;
+        }
+
+        var gastos = await _context.Gasto
+            .Where(g => g.VehiculoId == vehiculoId && g.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var gasto in gastos)
+        {
+            gasto.EliminadoEn = ahora;
+            gasto.ActualizadoEn = ahora;
+        }
+
+        var recordatorios = await _context.Recordatorio
+            .Where(r => r.VehiculoId == vehiculoId && r.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var recordatorio in recordatorios)
+        {
+            recordatorio.EliminadoEn = ahora;
+            recordatorio.ActualizadoEn = ahora;
+        }
+
+        var polizas = await _context.PolizaSeguro
+            .Where(p => p.VehiculoId == vehiculoId && p.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var poliza in polizas)
+        {
+            poliza.EliminadoEn = ahora;
+            poliza.ActualizadoEn = ahora;
+        }
+
+        var verificaciones = await _context.VerificacionVehicular
+            .Where(v => v.VehiculoId == vehiculoId && v.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var verificacion in verificaciones)
+        {
+            verificacion.EliminadoEn = ahora;
+            verificacion.ActualizadoEn = ahora;
+        }
+
+        var documentos = await _context.DocumentoVehicular
+            .Where(d => d.VehiculoId == vehiculoId && d.EliminadoEn == null)
+            .ToListAsync(cancellationToken);
+        foreach (var documento in documentos)
+        {
+            documento.EliminadoEn = ahora;
+            documento.ActualizadoEn = ahora;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }
