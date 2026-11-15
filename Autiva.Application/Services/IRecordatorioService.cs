@@ -23,4 +23,22 @@ public interface IRecordatorioService
         Guid vehiculoId,
         CrearRecordatorioKilometrajeRequest solicitud,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Lista los recordatorios de un vehículo específico con información de vencimiento.</summary>
+    Task<ResultadoListaRecordatorios> ListarPorVehiculoAsync(
+        Guid vehiculoId,
+        string? estado = null,
+        bool soloVencidos = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Lista los recordatorios de todos los vehículos del usuario autenticado.</summary>
+    Task<ResultadoListaRecordatorios> ListarPorUsuarioAsync(
+        string? estado = "pendiente",
+        bool soloVencidos = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Marca un recordatorio como concluido.</summary>
+    Task<ResultadoRecordatorio> ConcluirAsync(
+        Guid recordatorioId,
+        CancellationToken cancellationToken = default);
 }

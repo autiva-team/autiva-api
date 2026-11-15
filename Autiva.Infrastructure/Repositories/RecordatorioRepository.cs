@@ -57,8 +57,6 @@ public class RecordatorioRepository : IRecordatorioRepository
 
         var total = await consulta.CountAsync(cancellationToken);
 
-        // El próximo recordatorio por fecha es el con FechaLimite más cercana;
-        // los de tipo kilometraje (FechaLimite null) quedan al final.
         var proximo = await consulta
             .OrderBy(r => r.FechaLimite == null ? 1 : 0)
             .ThenBy(r => r.FechaLimite)
@@ -73,5 +71,63 @@ public class RecordatorioRepository : IRecordatorioRepository
         _context.Recordatorio.Add(recordatorio);
         await _context.SaveChangesAsync(cancellationToken);
         return recordatorio;
+    }
+
+    public async Task<IReadOnlyList<Recordatorio>> ObtenerPorVehiculoAsync(
+        Guid vehiculoId,
+        string? estado = null,
+        CancellationToken cancellationToken = default)
+    {
+        var consulta = _context.Recordatorio
+            .Include(r => r.Vehiculo)
+            .Where(r => r.VehiculoId == vehiculoId && r.EliminadoEn == null);
+
+        if (!string.IsNullOrWhiteSpace(estado))
+        {
+            consulta = consulta.Where(r => r.Estado == estado.Trim().ToLower());
+        }
+
+        return await consulta
+            .OrderBy(r => r.FechaLimite == null ? 1 : 0)
+            .ThenBy(r => r.FechaLimite)
+            .ThenBy(r => r.KmObjetivo)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Recordatorio>> ObtenerPorUsuarioAsync(
+        Guid usuarioId,
+        string? estado = "pendiente",
+        CancellationToken cancellationToken = default)
+    {
+        var consulta = _context.Recordatorio
+            .Include(r => r.Vehiculo)
+            .Where(r => r.Vehiculo.UsuarioId == usuarioId &&
+                        r.Vehiculo.EliminadoEn == null &&
+                        r.EliminadoEn == null);
+
+        if (!string.IsNullOrWhiteSpace(estado))
+        {
+            consulta = consulta.Where(r => r.Estado == estado.Trim().ToLower());
+        }
+
+        return await consulta
+            .OrderBy(r => r.FechaLimite == null ? 1 : 0)
+            .ThenBy(r => r.FechaLimite)
+            .ThenBy(r => r.KmObjetivo)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Recordatorio?> ObtenerPorIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Recordatorio
+            .Include(r => r.Vehiculo)
+            .FirstOrDefaultAsync(r => r.Id == id && r.EliminadoEn == null, cancellationToken);
+    }
+
+    public async Task ActualizarAsync(Recordatorio recordatorio, CancellationToken cancellationToken = default)
+    {
+        recordatorio.ActualizadoEn = DateTime.UtcNow;
+        _context.Recordatorio.Update(recordatorio);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }

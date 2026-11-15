@@ -1,4 +1,5 @@
 using Autiva.Api.Filters;
+using Autiva.Api.Jobs;
 using Autiva.Api.Security;
 using Autiva.Application;
 using Autiva.Application.Interfaces;
@@ -49,6 +50,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // Contexto del usuario autenticado (capa de presentación)
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Tarea en segundo plano para verificación periódica de recordatorios y alertas
+builder.Services.AddHostedService<RecordatoriosJob>();
 
 // Autenticación JWT (HS256). La clave/issuer/audience vienen de configuración
 // (appsettings / variables de App Service), nunca del código.

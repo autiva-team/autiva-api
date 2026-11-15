@@ -163,6 +163,132 @@ public class RecordatorioService : IRecordatorioService
         return ResultadoRecordatorio.CrearExito(MapearRespuesta(guardado));
     }
 
+    public async Task<ResultadoListaRecordatorios> ListarPorVehiculoAsync(
+        Guid vehiculoId,
+        string? estado = null,
+        bool soloVencidos = false,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoListaRecordatorios.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var vehiculo = await _vehiculoRepository.ObtenerDetalleAsync(usuarioId.Value, vehiculoId, cancellationToken);
+
+        if (vehiculo is null)
+            return ResultadoListaRecordatorios.CrearNoEncontrado("No se encontró el vehículo.");
+
+        var recordatorios = await _recordatorioRepository.ObtenerPorVehiculoAsync(vehiculoId, estado, cancellationToken);
+
+        var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+        var lista = recordatorios
+            .Select(r => MapearDetalle(r, vehiculo.OdometroActual, hoy, vehiculo.Placas, $"{vehiculo.Marca} {vehiculo.Modelo}"))
+            .Where(r => !soloVencidos || r.EstaVencido)
+            .ToList();
+
+        return ResultadoListaRecordatorios.CrearExito(lista);
+    }
+
+    public async Task<ResultadoListaRecordatorios> ListarPorUsuarioAsync(
+        string? estado = "pendiente",
+        bool soloVencidos = false,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoListaRecordatorios.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var recordatorios = await _recordatorioRepository.ObtenerPorUsuarioAsync(usuarioId.Value, estado, cancellationToken);
+
+        var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+        var lista = recordatorios
+            .Select(r => MapearDetalle(
+                r,
+                r.Vehiculo?.OdometroActual ?? 0,
+                hoy,
+                r.Vehiculo?.Placas,
+                r.Vehiculo != null ? $"{r.Vehiculo.Marca} {r.Vehiculo.Modelo}" : null))
+            .Where(r => !soloVencidos || r.EstaVencido)
+            .ToList();
+
+        return ResultadoListaRecordatorios.CrearExito(lista);
+    }
+
+    public async Task<ResultadoRecordatorio> ConcluirAsync(
+        Guid recordatorioId,
+        CancellationToken cancellationToken = default)
+    {
+        var usuarioId = _currentUserService.UsuarioId;
+
+        if (usuarioId is null || usuarioId == Guid.Empty)
+            return ResultadoRecordatorio.CrearNoAutorizado("Token inválido o usuario no identificado.");
+
+        var recordatorio = await _recordatorioRepository.ObtenerPorIdAsync(recordatorioId, cancellationToken);
+
+        if (recordatorio is null)
+            return ResultadoRecordatorio.CrearNoEncontrado("No se encontró el recordatorio.");
+
+        if (recordatorio.Vehiculo == null || recordatorio.Vehiculo.UsuarioId != usuarioId.Value)
+            return ResultadoRecordatorio.CrearNoAutorizado("No tiene permisos para modificar este recordatorio.");
+
+        recordatorio.Estado = "concluido";
+        recordatorio.FechaConcluido = DateTime.UtcNow;
+
+        await _recordatorioRepository.ActualizarAsync(recordatorio, cancellationToken);
+
+        return ResultadoRecordatorio.CrearExito(MapearRespuesta(recordatorio));
+    }
+
+    private static RecordatorioDetalleResponse MapearDetalle(
+        Recordatorio r,
+        int odometroActual,
+        DateOnly hoy,
+        string? placas,
+        string? modelo)
+    {
+        bool estaVencido = false;
+        int? diasRestantes = null;
+        int? kmRestantes = null;
+        bool proximoAVencer = false;
+
+        if (r.Criterio == "por_fecha" && r.FechaLimite.HasValue)
+        {
+            diasRestantes = r.FechaLimite.Value.DayNumber - hoy.DayNumber;
+            estaVencido = diasRestantes < 0;
+            proximoAVencer = !estaVencido && diasRestantes <= r.AnticipacionDias;
+        }
+        else if (r.Criterio == "por_kilometraje" && r.KmObjetivo.HasValue)
+        {
+            kmRestantes = r.KmObjetivo.Value - odometroActual;
+            estaVencido = kmRestantes <= 0;
+            proximoAVencer = !estaVencido && kmRestantes <= 500;
+        }
+
+        return new RecordatorioDetalleResponse
+        {
+            Id = r.Id,
+            VehiculoId = r.VehiculoId,
+            VehiculoPlacas = placas,
+            VehiculoModelo = modelo,
+            Tipo = r.Tipo,
+            Titulo = r.Titulo,
+            Criterio = r.Criterio,
+            FechaLimite = r.FechaLimite,
+            KmObjetivo = r.KmObjetivo,
+            AnticipacionDias = r.AnticipacionDias,
+            PushPrioritaria = r.PushPrioritaria,
+            Estado = r.Estado,
+            FechaConcluido = r.FechaConcluido,
+            CreadoEn = r.CreadoEn,
+            EstaVencido = estaVencido,
+            DiasRestantes = diasRestantes,
+            KmRestantes = kmRestantes,
+            ProximoAVencer = proximoAVencer
+        };
+    }
+
     private static string NormalizarTipo(string? tipo, string valorPorDefecto)
     {
         if (string.IsNullOrWhiteSpace(tipo))

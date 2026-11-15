@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Autiva.Api.Controllers;
 
 /// <summary>
-/// Endpoints para el resumen del vehículo y la gestión de recordatorios.
+/// Endpoints para el resumen del vehículo y la gestión de recordatorios y vencimientos.
 /// </summary>
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}")]
@@ -39,6 +39,53 @@ public class RecordatoriosController : ControllerBase
 
             return NotFound(new { mensaje = resultado.Mensaje });
         }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Consulta los recordatorios y vencimientos de un vehículo específico,
+    /// con filtros opcionales de estado y vencimiento.
+    /// </summary>
+    [HttpGet("recordatorios")]
+    [ProducesResponseType(typeof(IReadOnlyList<RecordatorioDetalleResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerPorVehiculo(
+        Guid vehiculoId,
+        [FromQuery] string? estado = null,
+        [FromQuery] bool soloVencidos = false,
+        CancellationToken cancellationToken = default)
+    {
+        var resultado = await _recordatorioService.ListarPorVehiculoAsync(vehiculoId, estado, soloVencidos, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
+    }
+
+    /// <summary>
+    /// Consulta todos los recordatorios y vencimientos del usuario autenticado
+    /// (a través de todos sus vehículos).
+    /// </summary>
+    [HttpGet("/api/recordatorios")]
+    [ProducesResponseType(typeof(IReadOnlyList<RecordatorioDetalleResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ObtenerTodos(
+        [FromQuery] string? estado = "pendiente",
+        [FromQuery] bool soloVencidos = false,
+        CancellationToken cancellationToken = default)
+    {
+        var resultado = await _recordatorioService.ListarPorUsuarioAsync(estado, soloVencidos, cancellationToken);
+
+        if (!resultado.Exito)
+            return Unauthorized(new { mensaje = resultado.Mensaje });
 
         return Ok(resultado.Datos);
     }
@@ -99,5 +146,27 @@ public class RecordatoriosController : ControllerBase
         }
 
         return Created($"/api/vehiculos/{vehiculoId}/recordatorios/{resultado.Datos!.Id}", resultado.Datos);
+    }
+
+    /// <summary>
+    /// Marca un recordatorio como concluido.
+    /// </summary>
+    [HttpPatch("/api/recordatorios/{id:guid}/concluir")]
+    [ProducesResponseType(typeof(RecordatorioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Concluir(Guid id, CancellationToken cancellationToken)
+    {
+        var resultado = await _recordatorioService.ConcluirAsync(id, cancellationToken);
+
+        if (!resultado.Exito)
+        {
+            if (resultado.NoAutorizado)
+                return Unauthorized(new { mensaje = resultado.Mensaje });
+
+            return NotFound(new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Datos);
     }
 }
