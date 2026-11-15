@@ -85,4 +85,12 @@ public class ServicioRepository : IServicioRepository
 
         return (items, totalRegistros);
     }
+
+    public Task<ServicioMantenimiento?> ObtenerUltimoConMetaAsync(Guid vehiculoId, CancellationToken cancellationToken = default) =>
+        _context.ServicioMantenimiento
+            .Include(s => s.TipoServicio)
+            .Where(s => s.VehiculoId == vehiculoId && s.EliminadoEn == null && s.MetaProximoKm != null)
+            .OrderByDescending(s => s.Fecha)
+            .ThenByDescending(s => s.KilometrajeServicio)
+            .FirstOrDefaultAsync(cancellationToken);
 }

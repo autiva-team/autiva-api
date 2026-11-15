@@ -401,4 +401,109 @@ public class ServicioServiceTests
         Assert.Equal("Aceite y filtros", resultado.Datos.TipoServicio);
         Assert.Equal(11700, resultado.Datos.KilometrajeServicio);
     }
+
+    // ---------- ObtenerAvanceAsync ----------
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_VehiculoNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _vehiculoRepository
+            .Setup(r => r.ObtenerDetalleAsync(UsuarioId, VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Vehiculo?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_SinServicioConMeta_RegresaOdometroYRestoNull()
+    {
+        // Arrange: no es error, el frontend invita a registrar un servicio con meta.
+        PrepararUsuarioYVehiculo(odometroActual: 12000);
+        _servicioRepository
+            .Setup(r => r.ObtenerUltimoConMetaAsync(VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServicioMantenimiento?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        var datos = resultado.Datos!;
+        Assert.Equal(12000, datos.OdometroActual);
+        Assert.Null(datos.UltimoServicio);
+        Assert.Null(datos.MetaKm);
+        Assert.Null(datos.KmRestantes);
+        Assert.Null(datos.PorcentajeAvance);
+        Assert.Null(datos.Vencido);
+        Assert.Null(datos.KmPorDia);
+        Assert.Null(datos.DiasEstimados);
+        Assert.Null(datos.FechaEstimada);
+        Assert.Null(datos.FechaRetorno);
+    }
+
+    [Fact]
+    public async Task ObtenerAvanceAsync_ConServicioConMeta_CalculaAvanceCompleto()
+    {
+        // Arrange: servicio de hace 20 días en 10000 km con meta en 15000; odómetro
+        // actual en 12000 (2000 km recorridos, 100 km/día). Verificado a mano.
+        PrepararUsuarioYVehiculo(odometroActual: 12000);
+        var hoyMexico = ZonaMexico.Ahora();
+        var fechaServicio = DateOnly.FromDateTime(hoyMexico).AddDays(-20);
+        var fechaRetorno = fechaServicio.AddDays(1);
+        var ultimoConMeta = new ServicioMantenimiento
+        {
+            Id = Guid.NewGuid(),
+            VehiculoId = VehiculoId,
+            Fecha = fechaServicio,
+            KilometrajeServicio = 10000,
+            MetaProximoKm = 15000,
+            FechaRetorno = fechaRetorno,
+            TipoServicio = new TipoServicio { Id = 1, Nombre = "Aceite y filtros" }
+        };
+        _servicioRepository
+            .Setup(r => r.ObtenerUltimoConMetaAsync(VehiculoId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ultimoConMeta);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.ObtenerAvanceAsync(VehiculoId);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        var datos = resultado.Datos!;
+        Assert.Equal(ultimoConMeta.Id, datos.UltimoServicio!.Id);
+        Assert.Equal(15000, datos.MetaKm);
+        Assert.Equal(12000, datos.OdometroActual);
+        Assert.Equal(3000, datos.KmRestantes);
+        Assert.Equal(40.0m, datos.PorcentajeAvance);
+        Assert.False(datos.Vencido);
+        Assert.Equal(100m, datos.KmPorDia);
+        Assert.Equal(30, datos.DiasEstimados);
+        Assert.Equal(DateOnly.FromDateTime(hoyMexico).AddDays(30), datos.FechaEstimada);
+        Assert.Equal(fechaRetorno, datos.FechaRetorno);
+    }
 }

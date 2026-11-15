@@ -23,4 +23,12 @@ public interface IServicioService
     Task<ResultadoServicio> ObtenerDetalleAsync(
         Guid servicioId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Avance hacia el próximo servicio de un vehículo del usuario del token, según la
+    /// meta de kilometraje del último servicio que la tenga.
+    /// </summary>
+    Task<ResultadoAvanceServicio> ObtenerAvanceAsync(
+        Guid vehiculoId,
+        CancellationToken cancellationToken = default);
 }
