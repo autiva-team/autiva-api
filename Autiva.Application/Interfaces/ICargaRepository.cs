@@ -55,4 +55,25 @@ public interface ICargaRepository
     /// falló por un conflicto de id duplicado (carrera sobre la llave primaria).
     /// </summary>
     Task<CargaCombustible?> RegistrarAsync(CargaCombustible carga, Guid vehiculoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Carga anterior y siguiente (por fecha y hora) a <paramref name="fechaHora"/>, sin
+    /// contar <paramref name="cargaIdExcluida"/> (la que se edita) ni las borradas. Null en
+    /// cualquiera de los dos si no hay carga en ese lado.
+    /// </summary>
+    Task<(CargaCombustible? Anterior, CargaCombustible? Siguiente)> ObtenerVecinasAsync(
+        Guid vehiculoId, DateTime fechaHora, Guid cargaIdExcluida, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Guarda los cambios de la carga (ya mutada por el servicio), recalcula el rendimiento
+    /// de todas las cargas no borradas del vehículo y, si el nuevo odómetro es mayor al
+    /// actual del vehículo, lo actualiza. Todo en una sola transacción.
+    /// </summary>
+    Task<CargaCombustible> EditarAsync(CargaCombustible carga, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra lógicamente la carga y recalcula el rendimiento de las demás cargas no
+    /// borradas del vehículo, en una sola transacción.
+    /// </summary>
+    Task EliminarAsync(Guid id, CancellationToken cancellationToken = default);
 }

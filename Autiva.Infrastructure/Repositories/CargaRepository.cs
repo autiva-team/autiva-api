@@ -1,4 +1,5 @@
 using Autiva.Application.Interfaces;
+using Autiva.Application.Services;
 using Autiva.Domain.Entities;
 using Autiva.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -122,5 +123,92 @@ public class CargaRepository : ICargaRepository
 
             return carga;
         });
+    }
+
+    public async Task<(CargaCombustible? Anterior, CargaCombustible? Siguiente)> ObtenerVecinasAsync(
+        Guid vehiculoId, DateTime fechaHora, Guid cargaIdExcluida, CancellationToken cancellationToken = default)
+    {
+        var anterior = await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null &&
+                        c.Id != cargaIdExcluida && c.FechaHora < fechaHora)
+            .OrderByDescending(c => c.FechaHora)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var siguiente = await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null &&
+                        c.Id != cargaIdExcluida && c.FechaHora > fechaHora)
+            .OrderBy(c => c.FechaHora)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (anterior, siguiente);
+    }
+
+    public async Task<CargaCombustible> EditarAsync(CargaCombustible carga, CancellationToken cancellationToken = default)
+    {
+        var estrategia = _context.Database.CreateExecutionStrategy();
+
+        return await estrategia.ExecuteAsync(async () =>
+        {
+            await using var transaccion = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            carga.ActualizadoEn = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // El rendimiento de esta carga y el de las posteriores depende de los litros
+            // y el odómetro que se acaban de cambiar: se recalculan todas desde cero.
+            await RecalcularRendimientosAsync(carga.VehiculoId, cancellationToken);
+
+            var vehiculo = await _context.Vehiculo.FirstAsync(v => v.Id == carga.VehiculoId, cancellationToken);
+
+            if (carga.Odometro > vehiculo.OdometroActual)
+            {
+                vehiculo.OdometroActual = carga.Odometro;
+                vehiculo.ActualizadoEn = DateTime.UtcNow;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            await transaccion.CommitAsync(cancellationToken);
+
+            return carga;
+        });
+    }
+
+    public async Task EliminarAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var estrategia = _context.Database.CreateExecutionStrategy();
+
+        await estrategia.ExecuteAsync(async () =>
+        {
+            await using var transaccion = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            var carga = await _context.CargaCombustible.FirstAsync(c => c.Id == id, cancellationToken);
+
+            carga.EliminadoEn = DateTime.UtcNow;
+            carga.ActualizadoEn = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // Nunca se baja el odómetro del vehículo al borrar: no se toca aquí.
+            await RecalcularRendimientosAsync(carga.VehiculoId, cancellationToken);
+
+            await transaccion.CommitAsync(cancellationToken);
+        });
+    }
+
+    /// <summary>
+    /// Recalcula el rendimiento_kml de todas las cargas no borradas del vehículo, en
+    /// orden cronológico. Reutilizado por <see cref="EditarAsync"/> y <see cref="EliminarAsync"/>,
+    /// porque cambiar o borrar una carga afecta el rendimiento de las que le siguen.
+    /// </summary>
+    private async Task RecalcularRendimientosAsync(Guid vehiculoId, CancellationToken cancellationToken)
+    {
+        var cargas = await _context.CargaCombustible
+            .Where(c => c.VehiculoId == vehiculoId && c.EliminadoEn == null)
+            .OrderBy(c => c.FechaHora)
+            .ThenBy(c => c.Odometro)
+            .ToListAsync(cancellationToken);
+
+        CalculadoraRendimiento.RecalcularRendimientos(cargas);
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }

@@ -411,4 +411,227 @@ public class CargaServiceTests
         Assert.Equal(22m, resultado.Datos.PrecioPorLitro);
         Assert.Equal("Magna", resultado.Datos.TipoCombustible);
     }
+
+    // ---------- EditarAsync ----------
+
+    private static EditarCargaRequest SolicitudEditarValida() => new()
+    {
+        TipoCombustibleId = 1,
+        Litros = 40m,
+        CostoTotal = 900m,
+        Odometro = 1000,
+        TanqueLleno = true,
+        FechaHora = new DateTime(2026, 11, 3)
+    };
+
+    private void PrepararCargaYTipoParaEditar(CargaCombustible carga)
+    {
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _cargaRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(carga);
+        _cargaRepository
+            .Setup(r => r.ObtenerTipoCombustibleAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TipoCombustible { Id = 1, Nombre = "Magna" });
+    }
+
+    [Fact]
+    public async Task EditarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(Guid.NewGuid(), SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task EditarAsync_CargaNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _cargaRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CargaCombustible?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(Guid.NewGuid(), SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task EditarAsync_LitrosCero_RegresaValidacion()
+    {
+        // Arrange
+        var carga = Carga(new DateTime(2026, 11, 3), 1000);
+        PrepararCargaYTipoParaEditar(carga);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.Litros = 0m;
+
+        // Act
+        var resultado = await servicio.EditarAsync(carga.Id, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("Los litros deben ser mayores a cero.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_TipoCombustibleInexistente_RegresaValidacion()
+    {
+        // Arrange
+        var carga = Carga(new DateTime(2026, 11, 3), 1000);
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _cargaRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(carga);
+        _cargaRepository
+            .Setup(r => r.ObtenerTipoCombustibleAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TipoCombustible?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(carga.Id, SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El tipo de combustible no existe.", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_OdometroMenorAlDeLaAnterior_RegresaValidacion()
+    {
+        // Arrange: la carga anterior quedó en 1200 km; no se puede editar a 1000.
+        var carga = Carga(new DateTime(2026, 11, 3), 1000);
+        PrepararCargaYTipoParaEditar(carga);
+        var anterior = Carga(new DateTime(2026, 11, 1), 1200);
+        _cargaRepository
+            .Setup(r => r.ObtenerVecinasAsync(VehiculoId, It.IsAny<DateTime>(), carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((anterior, (CargaCombustible?)null));
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EditarAsync(carga.Id, SolicitudEditarValida());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El odómetro no puede ser menor al actual (1200 km).", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_OdometroMayorAlDeLaSiguiente_RegresaValidacion()
+    {
+        // Arrange: la carga siguiente está en 1050 km; no se puede editar a 1000... pero
+        // sí 1100, que es mayor a la siguiente (1050) y debe rechazarse.
+        var carga = Carga(new DateTime(2026, 11, 3), 1000);
+        PrepararCargaYTipoParaEditar(carga);
+        var siguiente = Carga(new DateTime(2026, 11, 5), 1050);
+        _cargaRepository
+            .Setup(r => r.ObtenerVecinasAsync(VehiculoId, It.IsAny<DateTime>(), carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((CargaCombustible?)null, siguiente));
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.Odometro = 1100;
+
+        // Act
+        var resultado = await servicio.EditarAsync(carga.Id, solicitud);
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.Contains("El odómetro no puede ser mayor al de la siguiente carga (1050 km).", resultado.Errores);
+    }
+
+    [Fact]
+    public async Task EditarAsync_DatosValidos_ActualizaYRegresaExito()
+    {
+        // Arrange
+        var carga = Carga(new DateTime(2026, 11, 3), 1000, litros: 30m, costoTotal: 700m);
+        PrepararCargaYTipoParaEditar(carga);
+        _cargaRepository
+            .Setup(r => r.ObtenerVecinasAsync(VehiculoId, It.IsAny<DateTime>(), carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((CargaCombustible?)null, (CargaCombustible?)null));
+        _cargaRepository
+            .Setup(r => r.EditarAsync(It.IsAny<CargaCombustible>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CargaCombustible c, CancellationToken _) => c);
+        _cargaRepository
+            .Setup(r => r.ObtenerAnteriorAsync(VehiculoId, It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CargaCombustible?)null);
+        var servicio = CrearServicio();
+        var solicitud = SolicitudEditarValida();
+        solicitud.Litros = 45m;
+        solicitud.CostoTotal = 990m;
+
+        // Act
+        var resultado = await servicio.EditarAsync(carga.Id, solicitud);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        Assert.Equal(45m, resultado.Datos!.Litros);
+        Assert.Equal(990m, resultado.Datos.CostoTotal);
+        Assert.Equal(22m, resultado.Datos.PrecioPorLitro);
+    }
+
+    // ---------- EliminarAsync ----------
+
+    [Fact]
+    public async Task EliminarAsync_UsuarioNoAutenticado_RegresaNoAutorizado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns((Guid?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoAutorizado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_CargaNoExiste_RegresaNoEncontrado()
+    {
+        // Arrange
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _cargaRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CargaCombustible?)null);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(Guid.NewGuid());
+
+        // Assert
+        Assert.False(resultado.Exito);
+        Assert.True(resultado.NoEncontrado);
+    }
+
+    [Fact]
+    public async Task EliminarAsync_CargaExiste_BorraYRegresaExito()
+    {
+        // Arrange
+        var carga = Carga(new DateTime(2026, 11, 3), 1000);
+        _currentUserService.Setup(s => s.UsuarioId).Returns(UsuarioId);
+        _cargaRepository
+            .Setup(r => r.ObtenerPorUsuarioAsync(UsuarioId, carga.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(carga);
+        var servicio = CrearServicio();
+
+        // Act
+        var resultado = await servicio.EliminarAsync(carga.Id);
+
+        // Assert
+        Assert.True(resultado.Exito);
+        _cargaRepository.Verify(r => r.EliminarAsync(carga.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

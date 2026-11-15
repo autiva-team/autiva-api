@@ -25,4 +25,21 @@ public interface ICargaService
     Task<ResultadoCarga> ObtenerDetalleAsync(
         Guid cargaId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Corrige una carga de un vehículo del usuario del token y recalcula el rendimiento
+    /// de las cargas del vehículo (la editada y las que dependen de ella).
+    /// </summary>
+    Task<ResultadoCarga> EditarAsync(
+        Guid cargaId,
+        EditarCargaRequest solicitud,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Elimina (borrado lógico) una carga de un vehículo del usuario del token y
+    /// recalcula el rendimiento de las demás cargas del vehículo.
+    /// </summary>
+    Task<ResultadoEliminarCarga> EliminarAsync(
+        Guid cargaId,
+        CancellationToken cancellationToken = default);
 }
