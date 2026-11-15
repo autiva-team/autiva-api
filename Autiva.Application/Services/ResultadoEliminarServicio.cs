@@ -3,7 +3,7 @@ namespace Autiva.Application.Services;
 /// <summary>
 /// Resultado de eliminar (borrado lógico) un servicio de mantenimiento.
 /// </summary>
-public class ResultadoEliminarServicio
+public class ResultadoEliminarServicio : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

@@ -11,7 +11,7 @@ namespace Autiva.Api.Controllers;
 [ApiController]
 [Route("api/vehiculos/{vehiculoId:guid}/servicios")]
 [Authorize]
-public class ServiciosController : ControllerBase
+public class ServiciosController : AutivaControllerBase
 {
     private readonly IServicioService _servicioService;
 
@@ -38,18 +38,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.RegistrarAsync(vehiculoId, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            if (resultado.Conflicto)
-                return Conflict(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del servicio inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del servicio inválidos.");
 
         return Created($"/api/vehiculos/{vehiculoId}/servicios/{resultado.Datos!.Id}", resultado.Datos);
     }
@@ -71,12 +60,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerHistorialAsync(vehiculoId, pagina, tamano, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -94,12 +78,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerDetalleAsync(id, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -118,12 +97,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.ObtenerAvanceAsync(vehiculoId, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return Ok(resultado.Datos);
     }
@@ -145,15 +119,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.EditarAsync(id, solicitud, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            if (resultado.NoEncontrado)
-                return NotFound(new { mensaje = resultado.Mensaje });
-
-            return BadRequest(new { mensaje = "Datos del servicio inválidos.", errores = resultado.Errores });
-        }
+            return ErrorDesdeResultado(resultado, "Datos del servicio inválidos.");
 
         return Ok(resultado.Datos);
     }
@@ -171,12 +137,7 @@ public class ServiciosController : ControllerBase
         var resultado = await _servicioService.EliminarAsync(id, cancellationToken);
 
         if (!resultado.Exito)
-        {
-            if (resultado.NoAutorizado)
-                return Unauthorized(new { mensaje = resultado.Mensaje });
-
-            return NotFound(new { mensaje = resultado.Mensaje });
-        }
+            return ErrorDesdeResultado(resultado);
 
         return NoContent();
     }

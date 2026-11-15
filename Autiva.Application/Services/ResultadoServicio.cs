@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de registrar un servicio de mantenimiento.
 /// </summary>
-public class ResultadoServicio
+public class ResultadoServicio : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

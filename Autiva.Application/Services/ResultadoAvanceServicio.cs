@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de consultar el avance hacia el próximo servicio de un vehículo del usuario autenticado.
 /// </summary>
-public class ResultadoAvanceServicio
+public class ResultadoAvanceServicio : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

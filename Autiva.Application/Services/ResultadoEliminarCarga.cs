@@ -3,7 +3,7 @@ namespace Autiva.Application.Services;
 /// <summary>
 /// Resultado de eliminar (borrado lógico) una carga de combustible.
 /// </summary>
-public class ResultadoEliminarCarga
+public class ResultadoEliminarCarga : IResultadoOperacion
 {
     public bool Exito { get; init; }
 
