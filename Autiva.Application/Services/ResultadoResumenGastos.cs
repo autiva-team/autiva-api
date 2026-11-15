@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de consultar el resumen de gastos del mes de un vehículo del usuario autenticado.
 /// </summary>
-public class ResultadoResumenGastos
+public class ResultadoResumenGastos : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de consultar el historial paginado de cargas de un vehículo.
 /// </summary>
-public class ResultadoHistorialCargas
+public class ResultadoHistorialCargas : IResultadoOperacion
 {
     public bool Exito { get; init; }
 

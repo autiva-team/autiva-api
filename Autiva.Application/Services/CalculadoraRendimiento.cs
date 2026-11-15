@@ -1,3 +1,5 @@
+using Autiva.Domain.Entities;
+
 namespace Autiva.Application.Services;
 
 /// <summary>
@@ -5,6 +7,37 @@ namespace Autiva.Application.Services;
 /// </summary>
 public static class CalculadoraRendimiento
 {
+    /// <summary>
+    /// Recalcula <see cref="CargaCombustible.RendimientoKml"/> de cada carga de la lista,
+    /// con la misma regla del registro: solo las de tanque lleno, y solo si hay una de
+    /// tanque lleno anterior en la lista; si no aplica, null. Usado después de editar o
+    /// borrar una carga (HU-023), porque cambia el rendimiento de las posteriores.
+    /// </summary>
+    /// <param name="cargasOrdenadas">Cargas no borradas del vehículo, de la más antigua a la más reciente.</param>
+    public static void RecalcularRendimientos(IReadOnlyList<CargaCombustible> cargasOrdenadas)
+    {
+        CargaCombustible? ultimaTanqueLleno = null;
+        var litrosDesdeUltimaTanqueLleno = 0m;
+
+        foreach (var carga in cargasOrdenadas)
+        {
+            litrosDesdeUltimaTanqueLleno += carga.Litros;
+
+            if (!carga.TanqueLleno)
+            {
+                carga.RendimientoKml = null;
+                continue;
+            }
+
+            carga.RendimientoKml = ultimaTanqueLleno is null
+                ? null
+                : Calcular(carga.Odometro, ultimaTanqueLleno.Odometro, litrosDesdeUltimaTanqueLleno);
+
+            ultimaTanqueLleno = carga;
+            litrosDesdeUltimaTanqueLleno = 0m;
+        }
+    }
+
     /// <summary>
     /// Rendimiento entre la última carga de tanque lleno y la carga actual (también de tanque lleno).
     /// Quien llama decide si aplica (ambas cargas deben ser de tanque lleno); esta función solo

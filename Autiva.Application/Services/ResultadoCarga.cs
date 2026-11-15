@@ -5,7 +5,7 @@ using Autiva.Application.Dtos;
 /// <summary>
 /// Resultado de registrar una carga de combustible.
 /// </summary>
-public class ResultadoCarga
+public class ResultadoCarga : IResultadoOperacion
 {
     public bool Exito { get; init; }
 
