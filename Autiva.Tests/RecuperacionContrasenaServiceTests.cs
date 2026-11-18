@@ -137,6 +137,36 @@ public class RecuperacionContrasenaServiceTests
         Assert.Equal(CalcularHashDePrueba(tokenPlanoEnviado), tokenGuardado.TokenHash);
     }
 
+    [Theory]
+    [InlineData("http://localhost:5173", "http://localhost:5173/restablecer-contrasena?token=")]
+    [InlineData("http://localhost:5173/", "http://localhost:5173/restablecer-contrasena?token=")]
+    [InlineData(null, "/restablecer-contrasena?token=")]
+    public async Task RecuperarAsync_UrlBaseFrontend_ArmaEnlaceSinDiagonalDoble(string? urlBase, string inicioEsperado)
+    {
+        // Arrange
+        _configuration.Setup(c => c["Frontend:UrlBase"]).Returns(urlBase);
+
+        var usuario = UsuarioPrueba();
+        _usuarioRepository
+            .Setup(r => r.ObtenerPorCorreoAsync(usuario.Correo, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(usuario);
+
+        string? enlaceEnviado = null;
+        _enviadorCorreo
+            .Setup(e => e.EnviarEnlaceRecuperacionAsync(usuario.Correo, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((_, enlace, _) => enlaceEnviado = enlace)
+            .Returns(Task.CompletedTask);
+
+        var servicio = CrearServicio();
+
+        // Act
+        await servicio.RecuperarAsync(new RecuperarContrasenaRequest { Correo = usuario.Correo });
+
+        // Assert
+        Assert.NotNull(enlaceEnviado);
+        Assert.StartsWith(inicioEsperado, enlaceEnviado);
+    }
+
     [Fact]
     public async Task RecuperarAsync_FallaEnvioDeCorreo_SigueRespondiendoExito()
     {
