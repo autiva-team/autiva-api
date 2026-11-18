@@ -38,7 +38,7 @@ public class RecuperacionContrasenaService : IRecuperacionContrasenaService
         _passwordHasher = passwordHasher;
         _enviadorCorreo = enviadorCorreo;
         _logger = logger;
-        _urlBaseFrontend = configuration["Frontend:UrlBase"] ?? string.Empty;
+        _urlBaseFrontend = (configuration["Frontend:UrlBase"] ?? string.Empty).TrimEnd('/');
     }
 
     public async Task<ResultadoRecuperarContrasena> RecuperarAsync(
