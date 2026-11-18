@@ -64,27 +64,12 @@ if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
     throw new InvalidOperationException(
         "Jwt:Key no configurado o menor a 32 caracteres. Configúralo en appsettings o variables de App Service.");
 
-// Recuperación de contraseña (HU-027): fuera de Development el correo debe enviarse de
-// verdad y el enlace debe apuntar al frontend público. Sin esto la API responde 200 pero
-// el correo nunca llega o el enlace sale sin dominio, así que se falla al arrancar.
+// Recuperación de contraseña (HU-027): si falta Correo:Host o Frontend:UrlBase, esa sola
+// funcionalidad queda degradada (el enlace solo se escribe en el log, o sale sin dominio),
+// pero NO debe tumbar toda la API. Por eso solo se avisa con LogWarning más abajo, una vez
+// que la app ya levantó, en vez de lanzar una excepción aquí.
 var correoHost = builder.Configuration["Correo:Host"];
 var frontendUrlBase = builder.Configuration["Frontend:UrlBase"];
-
-if (!builder.Environment.IsDevelopment())
-{
-    var faltantes = new List<string>();
-
-    if (string.IsNullOrWhiteSpace(correoHost))
-        faltantes.Add("Correo:Host (y Correo:Usuario, Correo:Contrasena)");
-
-    if (string.IsNullOrWhiteSpace(frontendUrlBase))
-        faltantes.Add("Frontend:UrlBase");
-
-    if (faltantes.Count > 0)
-        throw new InvalidOperationException(
-            $"Falta configuración para recuperar contraseña: {string.Join(", ", faltantes)}. " +
-            "Configúralo en las variables de App Service (por ejemplo Correo__Host, Frontend__UrlBase).");
-}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
